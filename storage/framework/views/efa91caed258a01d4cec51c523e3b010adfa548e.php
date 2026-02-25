@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Otp Code</title>
+
+</head>
+
+<body>
+
+    <b>Your OTP generated code is :</b>
+    <span><?php echo e($details['otp_code']); ?></span>
+
+</body>
+
+</html><?php /**PATH /home/lavenjalwaters/public_html/resources/views/mail/otp_mail.blade.php ENDPATH**/ ?>

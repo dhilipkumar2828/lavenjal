@@ -1,0 +1,168 @@
+
+<?php $__env->startSection('content'); ?>
+   <!--start content-->
+   <main class="page-content cuustomerinfo">
+        <div class="row">
+					
+            <div class="col-xl-12">
+                <div class="card">
+                    <div class="card-header">
+                       <div class="row">
+                        <div class="col-3">
+                          <h6 class="mb">Customer Report</h6>
+                        </div>
+                        <div class="col-9 ">
+                         <form action="<?php echo e(url('get_customer_data')); ?>" class="d-flex justify-content-end" method="POST">
+                               <?php echo csrf_field(); ?>
+                               <div class="m-1">
+                                    <label>Start Date</label>
+                                    <input type="date" class="form-control start_date" name="start_date" id="start_date">
+                               </div>
+                               <div  class="m-1">
+                                   <label>End Date</label>
+                                   <input type="date" class="form-control end_date" name="end_date" id="end_date">
+                               </div>
+                              <div class="m-1">
+                                <h6 class="mb">Time Slot</h6>
+                                <select name="time_slot" id="time_slot" class="form-control">
+                                    <option value="">Select Slot</option>
+                                    <option value="Any time" <?php echo e((!empty($time_slot) && $time_slot=="Any time" ? 'selected' :'')); ?>>Any time</option>
+                                    <!--<option value="8am - 12pm" <?php echo e((!empty($time_slot) && $time_slot=="8am - 12pm" ? 'selected' :'')); ?>>8 - 12</option>-->
+                                    <!--<option value="12pm - 8pm" <?php echo e((!empty($time_slot) && $time_slot=="12pm - 8pm" ? 'selected' :'')); ?>>12 - 8</option>-->
+                                    <option value="8am - 11am" <?php echo e((!empty($time_slot)&& $time_slot=="8am - 11am" ? 'selected' :'')); ?>>8 - 11</option>
+                                    <option value="11am - 2pm" <?php echo e((!empty($time_slot)&& $time_slot=="11am - 2pm" ? 'selected' :'')); ?>>11 - 2</option>
+                                    <option value="2pm - 5pm" <?php echo e((!empty($time_slot)&& $time_slot=="2pm - 5pm" ? 'selected' :'')); ?>>2 - 5</option>
+                                    <option value="5pm - 8pm" <?php echo e((!empty($time_slot)&& $time_slot=="5pm - 8pm" ? 'selected' :'')); ?>>5 - 8</option>
+                                </select>
+                              </div>
+                               <div class="d-flex  align-items-end">
+                                   <button type="button" class="btn btn-secondary search_data m-1" data-user_type="customer">Filter</button>
+                                   <button type="submit" class="btn btn-primary m-1">Export</button>
+                                    <button type="button" class="btn btn-danger clear_date  m-1">Clear</button>
+                               </div>
+                                
+                         </form>
+                        </div>
+                       
+                        </div>
+                    </div>
+                    <div class="card-body">
+                            
+                        </div>
+                            <div class="tab-content mt-4" id="myTabContent">
+                                <!-- tabs 1 -->
+                                    <div class="tab-pane fade show Processing active" id="orders1" role="tabpanel" aria-labelledby="ordertabs1">
+
+                                            <div class="table-responsive table_render">
+                                                <?php echo $__env->make('backend.reports.table', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+                                            </div>
+
+                                    </div>
+                                <!-- tabs 1 -->
+
+                                <!-- tabs 2 -->
+                                    <div class="tab-pane fade" id="orders2" role="tabpanel" aria-labelledby="ordertabs2">
+
+                                        <div class="table-responsive">
+                                                        <table id="example2" class="table table-striped table-bordered" style="width:100%">
+                                                        <thead>
+                                                        <tr>
+                                                          <th>  S.no</th>
+                                                            <th>Order ID</th>
+                                                            <th>Customer Name</th>
+                                                            <th>Delivery Partner</th>
+                                                            <th>Delivery Date</th>
+                                                            <th>Status</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>				
+                                                    <tbody class="order_table">
+                                                    
+                                                                        
+                                                                             
+                                                    </tbody>
+                                                        </table>
+                                        </div>
+
+                                    </div>
+                                <!-- tabs 2 -->
+
+                                <!-- tabs 3 -->
+                                    <div class="tab-pane fade" id="orders3" role="tabpanel" aria-labelledby="ordertabs3">
+
+                                            <div class="table-responsive">
+                                                                <table id="example3" class="table table-striped table-bordered" style="width:100%">
+                                                                <thead>
+                                                        <tr>
+                                                        <th>S.no</th>
+                                                            <th>Order ID</th>
+                                                            <th>Customer Name</th>
+                                                            <th>Delivery Partner</th>
+                                                            <th>Delivery Date</th>
+                                                            <th>Status</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>				
+                                                    <tbody class="order_table">
+                                                     
+                                                                       
+                                                          </tbody>
+                                                                </table>
+                                            </div>
+                                    </div>
+                                <!-- tabs 3 -->
+
+                                <!-- tabs 4 -->
+                                    <div class="tab-pane fade" id="orders4" role="tabpanel" aria-labelledby="ordertabs4">
+                                            <div class="table-responsive">
+                                                                    <table id="example4" class="table table-striped table-bordered" style="width:100%">
+                                                                    <thead>
+                                                        <tr>
+                                                       
+                                                        <th>S.no</th>
+                                                            <th>Order ID</th>
+                                                            <th>Customer Name</th>
+                                                            <th>Delivery Partner</th>
+                                                            <th>Delivery Date</th>
+                                                            <th>Status</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>				
+                                                    <tbody class="order_table">
+                                                   
+                                                                    </tbody>
+                                                                    </table>
+                                            </div>
+                                    </div>
+                                <!-- tabs 4 -->
+
+                              
+
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+   </main>
+
+<?php $__env->stopSection(); ?>
+<?php $__env->startSection('scripts'); ?>
+<script type="text/javascript">
+$(document).ready(function() {
+        $('#example').DataTable({
+    "aoColumnDefs": [
+        { "bSortable": false, "aTargets": [6] }, 
+    ]
+    });
+});
+
+$(document).on("click",".clear_date",function(){
+    $('.start_date').val("");
+     $('.end_date').val("");
+})
+
+
+</script>
+
+<?php $__env->stopSection(); ?>
+<?php echo $__env->make('backend.layouts.master', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?><?php /**PATH /home/lavenjal/resources/views/backend/reports/customer.blade.php ENDPATH**/ ?>

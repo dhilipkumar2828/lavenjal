@@ -1,0 +1,261 @@
+@extends('backend.layouts.master')
+@section('content')
+    <!--start content-->
+    <main class="page-content">
+        <!--breadcrumb-->
+        <div class="page-breadcrumb d-none d-sm-flex align-items-center mb-3">
+            <div class="breadcrumb-title pe-3">Product List</div>
+            <div class="ps-3">
+                <!-- <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0 p-0">
+                        <li class="breadcrumb-item"><a href="javascript:;"><i class="bx bx-home-alt"></i></a>
+                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Data Table</li>
+                    </ol>
+                </nav> -->
+            </div>
+            <div class="ms-auto">
+                <a class="btn btn-primary mb-3 mb-lg-0" href="{{ url('products/create') }}">
+                    <i class="bi bi-plus-square-fill"></i>Add Product</a>
+            </div>
+        </div>
+        <!--end breadcrumb-->
+        <div class="card">
+            <div class="card-body p-4">
+                    @if ($message = Session::get('success'))
+                        {{-- <span class="alert alert-success">{{$message}}</span> --}}
+                        <div class="alert alert-success">{{ $message }}</div>
+                    @endif
+                
+                    <div class="table-responsive">
+                        <table id="example" class="table table-bordered" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>S.No</th>
+                                    <th>Product Name</th>
+                                    <th>Size</th>
+                                    <th>Customer Price</th>
+                                    <th>Retailer Price</th>
+                                    <th>Order By</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{-- @php $s=0; @endphp --}}
+                                @foreach ($products as $key => $product)
+                                    <tr>
+                                        <td>{{ $key + 1 }}</td>
+                                        
+                                        <td>
+                                            <a class="d-flex align-items-center gap-2 imgtable">
+                                                <div class="product-box" class="d-flex align-items-center gap-2 imgtable">
+                                                  
+                                                    <img src="{{ asset($product->image) }}" alt="">
+                                                   
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 product-title fw-bold">{{ $product->name }} </h6>
+                                                </div>
+                                            </a>
+                                        </td>
+                                        <td>{{ $product->size }}</td>
+                                        <td>{{ $product->customer_price }}</td>
+                                        <td>{{ $product->retailer_price }}</td>
+                                        <td>{{ $product->orderby }}</td>
+                                        <td><span class="badge  {{ $product->status=='active' ?'bg-light-success text-success' : 'bg-light-danger text-danger'}}">{{ $product->status=='active' ?'Active':'Inactive' }}</span>
+                                        </td>
+                                        <td>
+                                            <div class="table-actions d-flex align-items-center gap-3 fs-6">
+                                                <a data-id="{{ $product->id }}" class="bg-view product_view"
+                                                    data-bs-toggle="tooltip" data-bs-placement="bottom" title="View"><i
+                                                        class="bi bi-eye-fill" data-bs-toggle="modal"></i></a>
+                                                <a href="{{ route('products.edit', $product->id) }}" class="bg-edit"
+                                                    title="Edit"  data-bs-toggle="tooltip" data-bs-placement="bottom" ><i class="bi bi-pencil-fill"
+                                                        data-bs-target="#exampleLargeModal1"></i></a>
+                                                <form action="{{ route('products.destroy', $product->id) }}" method="POST">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-primary"  data-bs-toggle="tooltip" data-bs-placement="bottom"  title="Delete"><i
+                                                            class="bi bi-trash-fill  bg-delete"></i></button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                {{-- <tr>
+                                <td>2</td>
+                                    <td>
+
+										 <a class="d-flex align-items-center gap-2 imgtable" href="#">
+                                            <div class="product-box">
+                                            <img src="{{asset('backend/assets/images/can.png')}}" alt="">
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0 product-title fw-bold">Packaged Drinking water</h6>
+                                            </div>
+                                        </a>
+
+
+
+                                    </td>
+                                    <td>500ML, 1L, 5L</td>
+                                    <td><b>₹35.00, ₹45,00 </b></td>
+                                    <td><span class="badge bg-light-danger text-danger">Inactive</span></td>
+
+                                    <td>
+                                        <div class="table-actions d-flex align-items-center gap-3 fs-6">
+                                            <a href="#" class="bg-view" data-bs-toggle="tooltip"
+                                                data-bs-placement="bottom" title="View"><i
+                                                    class="bi bi-eye-fill" data-bs-toggle="modal" data-bs-target="#exampleLargeModal"></i></a>
+                                            <a href="#" class="bg-edit" data-bs-toggle="tooltip"
+                                                data-bs-placement="bottom" title="Edit"><i class="bi bi-pencil-fill" data-bs-toggle="modal" data-bs-target="#exampleLargeModal1"></i></a>
+                                                <a href="{{url('/customer')}}" class="text-primary" data-bs-toggle="tooltip"
+									data-bs-placement="bottom" title="Delete"><i class="bi bi-trash-fill  bg-delete"></i></a>
+                                        </div>
+                                    </td>
+                                </tr> --}}
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+    </main>
+    <!--end page main-->
+@endsection
+
+<!-- View -->
+<div class="col">
+    <!-- Modal -->
+    <div class="modal fade" id="product_modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Product details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="col commoncardheader">
+                        <div class="card shadow-none">
+                            <!-- <div class="card-header">
+                                <h6 class="mb">Customer</h6>
+                                </div> -->
+                            <div class="order-invoice card-body">
+                                <div class="d-flex align-items-center gap-3">
+                                    <!-- <div class="icon-box bg-light-primary border-0">
+                                <i class="bi bi-person text-primary"></i>
+                              </div> -->
+                                    <div class="row">
+                                        
+                                         <div class="col-lg-12 mb-3">
+                                            <label class="form-label col-6 col-sm-5 ">Product name :</label>
+                                            <span class="product_title"></span>
+                                        </div>
+                                        <div class="col-lg-12 mb-3">
+                                            <label class="form-label col-6 col-sm-5 ">Size :</label>
+                                            <span class="product_size"></span>
+                                        </div>
+                                        <div class="col-lg-12 mb-3">
+                                            <label class="form-label col-6 col-sm-5 ">Price :</label>
+                                            <span class="product_price"></span>
+                                        </div>
+                                        <div class="col-lg-12 mb-3">
+                                            <label class="form-label col-6 col-sm-5">Status :</label>
+                                        <span class="product_status"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- <button type="button" class="btn btn-primary">Submit</button> -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Edit -->
+<div class="col">
+    <!-- Modal -->
+    <div class="modal fade" id="exampleLargeModal1" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <label>Name</label>
+                            <input class="form-control mb-3" type="text" placeholder=""
+                                aria-label="default input example" value="Karthik">
+                        </div>
+                        <div class="col-lg-6">
+                            <label>Shop Name</label>
+                            <input class="form-control mb-3" type="text" placeholder=""
+                                aria-label="default input example" value="Lavenjal">
+                        </div>
+                        <div class="col-lg-6">
+                            <label>Phone Number</label>
+                            <input class="form-control mb-3" type="tel" placeholder=""
+                                aria-label="default input example" value="9876543210">
+                        </div>
+                        <div class="col-lg-6">
+                            <label>Email Id</label>
+                            <input class="form-control mb-3" type="email" placeholder=""
+                                aria-label="default input example" value="karthik@gmail.com">
+                        </div>
+                        <div class="col-lg-6">
+                            <label>Aadhaar Number</label>
+                            <input class="form-control mb-3" type="tel" placeholder=""
+                                aria-label="default input example" value="1234 5678 9012">
+                        </div>
+                        <div class="col-lg-6">
+                            <label>Shop Address</label>
+                            <textarea class="form-control mb-3">Ashok Pillar, Chennai.</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+@section('scripts')
+           <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+        $('#example').DataTable({
+    "aoColumnDefs": [
+        { "bSortable": false, "aTargets": [5] }, 
+    ]
+    });
+});
+</script>
+
+      
+  <script>
+
+    // Enable pusher logging - don't include this in production
+    Pusher.logToConsole = true;
+
+    var pusher = new Pusher('bcb9e6385bb7056a42f2', {
+      cluster: 'ap2'
+    });
+
+    var channel = pusher.subscribe('my-channel');
+    channel.bind('my-event', function(data) {
+      alert(JSON.stringify(data));
+    });
+  </script>
+@endsection
