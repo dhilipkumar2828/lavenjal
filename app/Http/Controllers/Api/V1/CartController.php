@@ -12,10 +12,10 @@ use App\Models\DeliveryCharges;
 use Illuminate\Http\Request;
 use App\Models\Order;
 use Illuminate\Support\Facades\Hash;
-use Validator;
-use Auth;
-use Session;
-use Response;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Exception;
 
 class CartController extends Controller
 {
@@ -57,7 +57,7 @@ class CartController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 400);
+                return response()->json($response, 400);
             }
 
 
@@ -173,7 +173,7 @@ class CartController extends Controller
             $params['deposit_amount'] = $depositamount;
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -183,7 +183,7 @@ class CartController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -204,7 +204,7 @@ class CartController extends Controller
 
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -214,7 +214,7 @@ class CartController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -324,7 +324,7 @@ class CartController extends Controller
             $success['totalamt'] = ($user->user_type == "customer" ? (($subamt + $delivery_charge + $depositamt) - $discountamt) : $subamt + $depositamt + $delivery_charge);
 
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -334,7 +334,7 @@ class CartController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 }

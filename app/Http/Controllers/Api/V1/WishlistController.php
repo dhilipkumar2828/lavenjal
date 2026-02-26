@@ -8,10 +8,10 @@ use App\Models\Product;
 use App\Models\Wishlists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Validator;
-use Auth;
-use Session;
-use Response;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Exception;
 
 class WishlistController extends Controller
 {
@@ -50,7 +50,7 @@ class WishlistController extends Controller
 
        $success['params']=$params;
        $response['response']=$success;
-       return \Response::json($response, 200);
+       return response()->json($response, 200);
         }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -61,7 +61,7 @@ class WishlistController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
     
@@ -82,7 +82,7 @@ class WishlistController extends Controller
 
        $success['params']=$params;
        $response['response']=$success;
-       return \Response::json($response, 200);
+       return response()->json($response, 200);
          }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -93,7 +93,7 @@ class WishlistController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
     
@@ -137,7 +137,7 @@ class WishlistController extends Controller
                 $success['message']="Wishlist List";
                 $success['products']=$wishlists;  
                 $response['response']=$success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
                  }
                 catch(Exception $e){
                 $success['statuscode'] =401;
@@ -148,7 +148,7 @@ class WishlistController extends Controller
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
                 }
              }
 }

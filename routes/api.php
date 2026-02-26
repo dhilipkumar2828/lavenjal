@@ -21,9 +21,6 @@ use App\Http\Controllers\Api\V1\UserController;
 |
 */
 
-// Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-//     return $request->user();
-// });
 
 Route::group([
     'prefix' => 'v1',
@@ -109,6 +106,4 @@ Route::post('/v1/check_notification', [OrderController::class, 'check_notificati
 
 Route::post('v1/sockettest', [BannerController::class, 'sockettest']);
 
-// Route::get('/QrCode_cartView/{id}', [CartController::class, 'QrCode_cartView'])->name('QrCode_cartView');
-//Cart
-//Route::post('v1/add_to_cart', [CartController::class, 'add_to_cart']);
+

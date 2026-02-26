@@ -1,13 +1,13 @@
 <?php return array (
   'darkaonline/l5-swagger' => 
   array (
-    'providers' => 
-    array (
-      0 => 'L5Swagger\\L5SwaggerServiceProvider',
-    ),
     'aliases' => 
     array (
       'L5Swagger' => 'L5Swagger\\L5SwaggerFacade',
+    ),
+    'providers' => 
+    array (
+      0 => 'L5Swagger\\L5SwaggerServiceProvider',
     ),
   ),
   'kitloong/laravel-migrations-generator' => 
@@ -54,13 +54,13 @@
   ),
   'maatwebsite/excel' => 
   array (
-    'providers' => 
-    array (
-      0 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
-    ),
     'aliases' => 
     array (
       'Excel' => 'Maatwebsite\\Excel\\Facades\\Excel',
+    ),
+    'providers' => 
+    array (
+      0 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
     ),
   ),
   'nesbot/carbon' => 
@@ -97,13 +97,13 @@
   ),
   'spatie/laravel-ignition' => 
   array (
-    'providers' => 
-    array (
-      0 => 'Spatie\\LaravelIgnition\\IgnitionServiceProvider',
-    ),
     'aliases' => 
     array (
       'Flare' => 'Spatie\\LaravelIgnition\\Facades\\Flare',
+    ),
+    'providers' => 
+    array (
+      0 => 'Spatie\\LaravelIgnition\\IgnitionServiceProvider',
     ),
   ),
 );

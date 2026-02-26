@@ -26,10 +26,4 @@ class CouponController extends Controller
        return view('backend.coupon.add');
     }
 
-    // public function delivery()
-    // {
-
-    //    return delivery('backend.orders.view_delivery');
-    // }
-    
 }

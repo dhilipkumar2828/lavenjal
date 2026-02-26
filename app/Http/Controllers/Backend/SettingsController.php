@@ -17,11 +17,4 @@ class SettingsController extends Controller
        return view('backend.settings.index');
        
     }
-
-    // public function view()
-    // {
-
-    //    return view('backend.retailer.view');
-    // }
-   
 }

@@ -13,15 +13,15 @@ use App\Models\Orderproducts;
 use App\Models\ShippingAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Validator;
-use Auth;
-use Session;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
 use App\Models\User_address;
-use Response;
 use App\Events\NewEvent;
-use Str;
-use DB;
-use Helper;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use App\helpers\Helper;
+use Exception;
 class UserController extends Controller
 {
 
@@ -48,7 +48,7 @@ public function update_user(Request $request){
                $success['user']=$user;
                $success['params']=$params;
                $response['response']=$success;
-               return \Response::json($response, 200); 
+               return response()->json($response, 200); 
             }else if(!empty($duplicate_check)){
                 $success['statuscode'] =401;
                 $success['message']="Duplicate email entry";
@@ -58,7 +58,7 @@ public function update_user(Request $request){
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
             }else{
                 $success['statuscode'] =401;
                 $success['message']="Duplicate phone entry";
@@ -68,7 +68,7 @@ public function update_user(Request $request){
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
             }
         }
             catch(Exception $e){
@@ -80,7 +80,7 @@ public function update_user(Request $request){
               $params=[];
               $success['params']=$params;
               $response['response']=$success;
-              return \Response::json($response, 401);
+              return response()->json($response, 401);
         }
 }
 }

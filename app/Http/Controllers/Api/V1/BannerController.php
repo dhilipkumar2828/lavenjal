@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Banner;
 use Illuminate\Http\Request;
+use Exception;
 
 class BannerController extends Controller
 {
@@ -29,7 +30,7 @@ class BannerController extends Controller
             $success['params']=$params;
             $success['banners']=$bannerlist;
             $response['response']=$success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
             }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -40,7 +41,7 @@ class BannerController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }               
     }
  

@@ -19,17 +19,4 @@ class WalletController extends Controller
        return view('backend.wallet.index');
        
     }
-
-    // public function view()
-    // {
-
-    //    return view('backend.coupon.add');
-    // }
-
-    // public function delivery()
-    // {
-
-    //    return delivery('backend.orders.view_delivery');
-    // }
-    
 }

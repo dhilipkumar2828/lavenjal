@@ -5,20 +5,20 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Validator;
+use Illuminate\Support\Facades\Validator;
+use Exception;
 use App\Models\User_address;
-use Auth;
-use DB;
-use Helper;
 use App\Models\Notifications;
 use App\Models\Owner_meta_data;
-use Symfony\Component\HttpFoundation\Response;
-use Str;
 use App\Models\City;
 use App\Models\DeliveryCharges;
 use App\Models\Pincode;
 use App\Models\NeededServiceList;
+use Illuminate\Support\Str;
+use App\helpers\Helper;
 class AuthController extends Controller
 {
     //
@@ -91,7 +91,7 @@ class AuthController extends Controller
             $params=[];
             $success['params']=$params;
             $response['response']=$success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         } else {
             // $success['token'] = auth()->user()->createToken('authToken')->accessToken;
             // $success['data'] = auth()->user();
@@ -113,7 +113,7 @@ class AuthController extends Controller
 
             // $success['params']=$params;
             // $response['response']=$success;
-            // return \Response::json($response, 200);
+            // return response()->json($response, 200);
             
             
             //
@@ -131,7 +131,7 @@ class AuthController extends Controller
 
         $success['params']=$params;
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         }
         }
         catch(Exception $e){
@@ -143,7 +143,7 @@ class AuthController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
 
@@ -163,7 +163,7 @@ class AuthController extends Controller
                     $params=[];
                     $success['params']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 400);
+                    return response()->json($response, 400);
             }
             }
          
@@ -175,7 +175,7 @@ class AuthController extends Controller
                 $params['status']=$status;
                 $success['params']=$params;
                 $response['response']=$success;
-                return \Response::json($response, 400);
+                return response()->json($response, 400);
         }else{
             
             $status="active";
@@ -218,7 +218,7 @@ class AuthController extends Controller
             
                     $success['params']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                             }
                     }else{
                         $success['statuscode'] =401;
@@ -226,7 +226,7 @@ class AuthController extends Controller
                         $params=[];
                         $success['params']=$params;
                         $response['response']=$success;
-                        return \Response::json($response, 401);
+                        return response()->json($response, 401);
                     }
 
         }
@@ -236,7 +236,7 @@ class AuthController extends Controller
                     $params=[];
                     $success['params']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
         }
         }
         catch(Exception $e){
@@ -248,7 +248,7 @@ class AuthController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
 
@@ -300,14 +300,14 @@ class AuthController extends Controller
                     $success['params']=$params;
                     $success['user_details']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                 } else {
                     $success['statuscode'] =401;
                     $success['message']="Invalid otp credentials";
                     $params=[];
                     $success['params']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
      
 
@@ -317,7 +317,7 @@ class AuthController extends Controller
                         $params=[];
                         $success['params']=$params;
                         $response['response']=$success;
-                        return \Response::json($response, 200);
+                        return response()->json($response, 200);
                 }
          }else{
                     $success['statuscode'] =401;
@@ -325,7 +325,7 @@ class AuthController extends Controller
                     $params=[];
                     $success['params']=$params;
                     $response['response']=$success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
          }
         }
         catch(Exception $e){
@@ -337,7 +337,7 @@ class AuthController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
 
@@ -439,7 +439,7 @@ class AuthController extends Controller
             $params=[];
             $success['params']=$params;
             $response['response']=$success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
         else if(!empty($duplicate_phone)){
             
@@ -448,7 +448,7 @@ class AuthController extends Controller
             $params=[];
             $success['params']=$params;
             $response['response']=$success;
-            return \Response::json($response, 401); 
+            return response()->json($response, 401); 
         }
         
         else{
@@ -622,7 +622,7 @@ class AuthController extends Controller
              
 
            DB::commit();
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         }
         }
         catch(Exception $e){
@@ -634,7 +634,7 @@ class AuthController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
     /**
@@ -684,7 +684,7 @@ class AuthController extends Controller
        $success['user']=$user;
        $success['params']=$params;
        $response['response']=$success;
-       return \Response::json($response, 200); 
+       return response()->json($response, 200); 
                  
      }  catch(Exception $e){
         $success['statuscode'] =401;
@@ -695,7 +695,7 @@ class AuthController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
 
     }
@@ -711,7 +711,7 @@ class AuthController extends Controller
                $params=[];
                $success['params']=$params;
                $response['response']=$success;
-               return \Response::json($response, 200); 
+               return response()->json($response, 200); 
             }
         }
                 catch(Exception $e){
@@ -723,7 +723,7 @@ class AuthController extends Controller
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
                 }
     }
     
@@ -811,7 +811,7 @@ class AuthController extends Controller
                     $success['params']=$params;
                     $success['user_details']=$user_details;
                     $response['response']=$success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
    } 
         catch(Exception $e){
                 $success['statuscode'] =401;
@@ -822,7 +822,7 @@ class AuthController extends Controller
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
         }
    }
 
@@ -837,7 +837,7 @@ class AuthController extends Controller
                        $params['pincode']=$request->pincode;
                        $success['params']=$params;
                        $response['response']=$success;
-                       return \Response::json($response, 200); 
+                       return response()->json($response, 200); 
             }else{
                 // if(!empty($request->phone_number)){
                         $needed_servicelist=new NeededServiceList();
@@ -853,7 +853,7 @@ class AuthController extends Controller
                        $params['pincode']=$request->pincode;
                        $success['params']=$params;
                        $response['response']=$success;
-                       return \Response::json($response, 200); 
+                       return response()->json($response, 200); 
             }
         }       
         catch(Exception $e){
@@ -865,7 +865,7 @@ class AuthController extends Controller
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
         }
     } 
     
@@ -887,7 +887,7 @@ class AuthController extends Controller
                        $params['service_list']=$cityArray;
                        $success['params']=$params;
                        $response['response']=$success;
-                       return \Response::json($response, 200); 
+                       return response()->json($response, 200); 
             
         }       
         catch(Exception $e){
@@ -899,7 +899,7 @@ class AuthController extends Controller
                   $params=[];
                   $success['params']=$params;
                   $response['response']=$success;
-                  return \Response::json($response, 401);
+                  return response()->json($response, 401);
         }
     } 
     
@@ -920,7 +920,7 @@ class AuthController extends Controller
         $success['delivery_charges']=$delivery;
         $success['params']=$params;
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -932,7 +932,7 @@ class AuthController extends Controller
 
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
      }
 }

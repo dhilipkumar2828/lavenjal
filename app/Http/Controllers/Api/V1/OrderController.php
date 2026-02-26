@@ -16,20 +16,20 @@ use App\Models\ShippingAddress;
 use DateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Validator;
-use Auth;
-use Session;
-use App\Models\User_address;
-use Response;
-use App\Events\NewEvent;
-use Str;
-
-use App\Models\Pincode;
-use DB;
-use Carbon\Carbon;
-use Helper;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Response as FacadeResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use App\Models\User_address;
+use App\Events\NewEvent;
+use Illuminate\Support\Str;
+use App\Models\Pincode;
+use Carbon\Carbon;
+use App\helpers\Helper;
+use Exception;
 
 class OrderController extends Controller
 {
@@ -492,7 +492,7 @@ class OrderController extends Controller
             $success['itemdetails'] = $item_details;
 
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } else {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -502,7 +502,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -514,11 +514,11 @@ class OrderController extends Controller
             $user_details = User::find($user->id);
 
             if (empty($request->order_id)) {
-                return \Response::json(['message' => "Order Id must not be empty", 'statusCode' => 401], 401);
+                return response()->json(['message' => "Order Id must not be empty", 'statusCode' => 401], 401);
             }
 
             if ($user_details->status != 1) {
-                return \Response::json(['message' => "Your account is inactive", 'statusCode' => 401], 401);
+                return response()->json(['message' => "Your account is inactive", 'statusCode' => 401], 401);
             }
 
             $owners_meta_data = Owner_meta_data::select('assigned_distributor')->where('user_id', $user->id)->first();
@@ -620,7 +620,7 @@ class OrderController extends Controller
                         $params = [];
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 401);
+                        return response()->json($response, 401);
                     }
                     $notifications = new Mobile_notifications;
                     $notifications->user_id = $user->id;
@@ -699,7 +699,7 @@ class OrderController extends Controller
             $success['params'] = $params;
             $response['response'] = $success;
 
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -709,7 +709,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -721,7 +721,7 @@ class OrderController extends Controller
     //         $user_details = User::find($user->id);
 
     //         if ($user_details->status != 1) {
-    //             return \Response::json(['message' => "Your account is inactive", 'statusCode' => 401], 401);
+    //             return response()->json(['message' => "Your account is inactive", 'statusCode' => 401], 401);
     //         }
 
     //         $owners_meta_data = Owner_meta_data::select('assigned_distributor')->where('user_id', $user->id)->first();
@@ -892,7 +892,7 @@ class OrderController extends Controller
     //                     $params = [];
     //                     $success['params'] = $params;
     //                     $response['response'] = $success;
-    //                     return \Response::json($response, 401);
+    //                     return response()->json($response, 401);
     //                 }
     //                 $notifications = new Mobile_notifications;
     //                 $notifications->user_id = $user->id;
@@ -946,9 +946,9 @@ class OrderController extends Controller
     //             $params = [];
     //             $success['params'] = $params;
     //             $response['response'] = $success;
-    //             return \Response::json($response, 401);
+    //             return response()->json($response, 401);
     //         }
-    //         return \Response::json($response, 200);
+    //         return response()->json($response, 200);
     //         //  }
     //         // else{
     //         //         $success['statuscode'] =401;
@@ -956,7 +956,7 @@ class OrderController extends Controller
     //         //         $params=[];
     //         //         $success['params']=$params;
     //         //         $response['response']=$success;
-    //         //         return \Response::json($response, 401);
+    //         //         return response()->json($response, 401);
     //         // }
 
     //         // print_r($this->time_slot($request->timeslot));
@@ -969,7 +969,7 @@ class OrderController extends Controller
     //         $params = [];
     //         $success['params'] = $params;
     //         $response['response'] = $success;
-    //         return \Response::json($response, 401);
+    //         return response()->json($response, 401);
     //     }
     // }
 
@@ -1067,7 +1067,7 @@ class OrderController extends Controller
             $success['track_order'] = $track_orders;
 
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -1077,7 +1077,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1163,7 +1163,7 @@ class OrderController extends Controller
             $success['returnablejar_qty'] = (!empty($orders) ? $orders->returnablejar_qty : '');
             $success['no_of_jars_available'] = (!empty($orders) ? Orderproducts::where('order_id', $orders->id)->sum('quantity') : '0');
             $response['response'] = $success;
-            return \Response::json($response, 200);
+            return response()->json($response, 200);
         } catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
@@ -1173,7 +1173,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1209,14 +1209,14 @@ class OrderController extends Controller
                     $success['params'] = $params;
                     $success['orders'] = $orderplaced;
                     $response['response'] = $success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                 } else {
                     $success['statuscode'] = 401;
                     $success['message'] = "Please login as distributor";
                     $params = [];
                     $success['params'] = $params;
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
             } else {
                 $success['statuscode'] = 401;
@@ -1224,7 +1224,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -1235,7 +1235,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1366,14 +1366,14 @@ class OrderController extends Controller
                     $success['address'] = $S_address;
                     $success['lat_lang'] = $U_address;
                     $response['response'] = $success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                 } else {
                     $success['statuscode'] = 200;
                     $success['message'] = "Address list empty";
                     $params = [];
                     $success['params'] = $params;
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
             } else {
                 $success['statuscode'] = 401;
@@ -1381,7 +1381,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -1392,7 +1392,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1422,14 +1422,14 @@ class OrderController extends Controller
                 $success['params'] = $params;
                 $success['orders'] = $report_count;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -1440,7 +1440,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1465,7 +1465,7 @@ class OrderController extends Controller
 
                     $success['params'] = [];
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
                 
                 $owner_meta_data = Owner_meta_data::where('user_id', $user_table->id)->first();
@@ -1477,7 +1477,7 @@ class OrderController extends Controller
 
                     $success['params'] = [];
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
                 
                 
@@ -1487,7 +1487,7 @@ class OrderController extends Controller
 
                     $success['params'] = [];
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
 
 
@@ -1599,14 +1599,14 @@ class OrderController extends Controller
                         $success['orders'] = $ord;
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 200);
+                        return response()->json($response, 200);
                     } else {
                         $success['statuscode'] = 401;
                         $success['message'] = "Address list empty";
                         $params = [];
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 401);
+                        return response()->json($response, 401);
                     }
                 } else if ($user_table->user_type == "distributor") {
 
@@ -1682,14 +1682,14 @@ class OrderController extends Controller
                         $success['orders'] = $ord;
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 200);
+                        return response()->json($response, 200);
                     } else {
                         $success['statuscode'] = 401;
                         $success['message'] = "Address list empty";
                         $params = [];
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 401);
+                        return response()->json($response, 401);
                     }
                 } else {
                     $success['statuscode'] = 401;
@@ -1697,7 +1697,7 @@ class OrderController extends Controller
                     $params = [];
                     $success['params'] = $params;
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
             } else {
                 $success['statuscode'] = 401;
@@ -1705,7 +1705,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -1716,7 +1716,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -1751,7 +1751,7 @@ class OrderController extends Controller
                                     $params = [];
                                     $success['params'] = $params;
                                     $response['response'] = $success;
-                                    return \Response::json($response, 400);
+                                    return response()->json($response, 400);
                                 }
                             }
                                 
@@ -1865,7 +1865,7 @@ class OrderController extends Controller
                                 $params['order_id'] = $request->order_id;
                                 $success['params'] = $params;
                                 $response['response'] = $success;
-                                return \Response::json($response, 200);
+                                return response()->json($response, 200);
                             }
                         } else if ($user->user_type == "distributor") {
 
@@ -1950,7 +1950,7 @@ class OrderController extends Controller
                                 $params['order_id'] = $request->order_id;
                                 $success['params'] = $params;
                                 $response['response'] = $success;
-                                return \Response::json($response, 200);
+                                return response()->json($response, 200);
                             }
                         } else {
                             $success['statuscode'] = 401;
@@ -1958,7 +1958,7 @@ class OrderController extends Controller
                             $params = [];
                             $success['params'] = $params;
                             $response['response'] = $success;
-                            return \Response::json($response, 401);
+                            return response()->json($response, 401);
                         }
                     } else {
                         $success['statuscode'] = 200;
@@ -1966,7 +1966,7 @@ class OrderController extends Controller
                         $params = [];
                         $success['params'] = $params;
                         $response['response'] = $success;
-                        return \Response::json($response, 401);
+                        return response()->json($response, 401);
                     }
                 } else {
                     $success['statuscode'] = 401;
@@ -1974,7 +1974,7 @@ class OrderController extends Controller
                     $params = [];
                     $success['params'] = $params;
                     $response['response'] = $success;
-                    return \Response::json($response, 401);
+                    return response()->json($response, 401);
                 }
             } else {
                 $success['statuscode'] = 401;
@@ -1982,7 +1982,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -1993,7 +1993,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2021,14 +2021,14 @@ class OrderController extends Controller
                 $success['address'] = $data;
                 $success['params'] = $data;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2039,7 +2039,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2083,7 +2083,7 @@ class OrderController extends Controller
                     $success['selected_address'] = $selected_address;
                     $params = [];
                     $response['response'] = $success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                 } else {
                     $success['address'] = [];
                     $success['statuscode'] = 200;
@@ -2091,7 +2091,7 @@ class OrderController extends Controller
                     $success['selected_address'] = (object) [];
                     $params = [];
                     $response['response'] = $success;
-                    return \Response::json($response, 200);
+                    return response()->json($response, 200);
                 }
             } else {
 
@@ -2100,7 +2100,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2111,7 +2111,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2188,14 +2188,14 @@ class OrderController extends Controller
                 $success['params'] = $params;
                 $success['selected_address'] = $selected_address;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2206,7 +2206,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2229,14 +2229,14 @@ class OrderController extends Controller
                 $params['id'] = $request->id;
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2247,7 +2247,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2425,7 +2425,7 @@ class OrderController extends Controller
                 $success['params'] = $params;
                 $success['notifications'] = $orders;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2436,7 +2436,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2458,7 +2458,7 @@ class OrderController extends Controller
                 $params['type'] = $request->type;
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $notification = Mobile_notifications::all();
                 foreach ($notification as $n) {
@@ -2471,7 +2471,7 @@ class OrderController extends Controller
                 $params['type'] = $request->type;
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2482,7 +2482,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 
@@ -2613,7 +2613,7 @@ class OrderController extends Controller
                 $params['order_date'] = $request->order_date;
                 $response['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 200);
+                return response()->json($response, 200);
             } else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Something went wrong";
@@ -2623,7 +2623,7 @@ class OrderController extends Controller
                 $params = [];
                 $success['params'] = $params;
                 $response['response'] = $success;
-                return \Response::json($response, 401);
+                return response()->json($response, 401);
             }
         } catch (Exception $e) {
             $success['statuscode'] = 401;
@@ -2634,7 +2634,7 @@ class OrderController extends Controller
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
-            return \Response::json($response, 401);
+            return response()->json($response, 401);
         }
     }
 }

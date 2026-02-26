@@ -13,9 +13,9 @@ use App\Models\Carts;
 use App\Models\Order;
 use App\Models\Orderproducts;
 use Illuminate\Support\Facades\Hash;
-use Validator;
-use Auth;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Exception;
 
 class ProductController extends Controller
 {
@@ -40,7 +40,7 @@ class ProductController extends Controller
         $success['message']="Product List";
         $success['products']=$products;        
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         
         //return response()->json(['products'=>$products]);  
         }
@@ -53,7 +53,7 @@ class ProductController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
 
@@ -94,7 +94,7 @@ class ProductController extends Controller
         //          $success['params']=$params;
         //          $success['message']="User not found";
         //          $response['response']=$success;
-        //          return \Response::json($response, 200);
+        //          return response()->json($response, 200);
         //          }
         $product->user_type=Auth::user()->user_type;
         }
@@ -104,7 +104,7 @@ class ProductController extends Controller
         $success['message']="Product List";
         $success['products']=$products;        
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -115,7 +115,7 @@ class ProductController extends Controller
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
     }
     
@@ -176,7 +176,7 @@ class ProductController extends Controller
                  $success['params']=$params;
                  $success['message']="User not found";
                  $response['response']=$success;
-                 return \Response::json($response, 200);
+                 return response()->json($response, 200);
                }
            
        //  }
@@ -187,14 +187,14 @@ class ProductController extends Controller
              $success['message']="Product Details List";
              $success['products']=$product;        
              $response['response']=$success;
-             return \Response::json($response, 200);
+             return response()->json($response, 200);
         }catch(Exception $e){
              $success['statuscode'] =401;
              $params=[];
              $success['params']=$params;
              $success['message']="Page not found";
              $response['response']=$success;
-             return \Response::json($response, 200);
+             return response()->json($response, 200);
         }
     }
 
@@ -212,7 +212,7 @@ public function most_like(){
         $success['message']="Most Like";
         $success['most_like']=$mostlike;        
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -223,7 +223,7 @@ public function most_like(){
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         } 
 }
 public function feedback(Request $request){
@@ -249,7 +249,7 @@ public function feedback(Request $request){
         $success['message']="Feedback List";
         $success['feedback']=$feedback;        
         $response['response']=$success;
-        return \Response::json($response, 200);
+        return response()->json($response, 200);
         }
         catch(Exception $e){
         $success['statuscode'] =401;
@@ -260,7 +260,7 @@ public function feedback(Request $request){
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
-          return \Response::json($response, 401);
+          return response()->json($response, 401);
         }
 }
 }

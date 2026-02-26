@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\CustomAuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,12 +35,6 @@ Route::get('/terms-conditions', function () {
 });
 
 Auth::routes(['register'=>false]);
-// Route::get('dashboard', [CustomAuthController::class, 'dashboard']);
-// Route::get('login', [CustomAuthController::class, 'index'])->name('login');
-// Route::post('custom-login', [CustomAuthController::class, 'customLogin'])->name('login.custom');
-// Route::get('registration', [CustomAuthController::class, 'registration'])->name('register-user');
-// Route::post('custom-registration', [CustomAuthController::class, 'customRegistration'])->name('register.custom');
-// Route::get('signout', [CustomAuthController::class, 'signOut'])->name('signout');
 
 Route::middleware([IsAdmin::class])->group(function(){
 Route::get('/dashboard', [\App\Http\Controllers\Backend\DashboardController::class, 'index']);
@@ -53,14 +46,8 @@ Route::post('/pusher_notifications', [\App\Http\Controllers\Backend\DashboardCon
 Route::post('/view_notifications', [\App\Http\Controllers\Backend\DashboardController::class, 'view_notifications']);
 
 
-// Route::get('/product', [\App\Http\Controllers\Backend\ProductController::class, 'index']);
-// Route::get('/product-add', [\App\Http\Controllers\Backend\ProductController::class, 'add']);
-
 Route::resource('products',\App\Http\Controllers\Backend\ProductController::class);
 Route::resource('sales-representative',\App\Http\Controllers\Backend\SalesrepController::class);
-
-
-
 
 Route::resource('distributor',\App\Http\Controllers\Backend\DistributorController::class);
 Route::resource('delivery_agent',\App\Http\Controllers\Backend\DeliveryController::class);
@@ -182,13 +169,6 @@ Route::get('/unavailable_lists', [\App\Http\Controllers\Backend\CityController::
 
 
 Route::get('/wallet', [\App\Http\Controllers\Backend\WalletController::class, 'index']);
-
-// Route::get('dashboard', [CustomAuthController::class, 'dashboard']);
-// Route::get('login', [CustomAuthController::class, 'index'])->name('login');
-// Route::post('custom-login', [CustomAuthController::class, 'customLogin'])->name('login.custom');
-// Route::get('registration', [CustomAuthController::class, 'registration'])->name('register-user');
-// Route::post('custom-registration', [CustomAuthController::class, 'customRegistration'])->name('register.custom');
-// Route::get('signout', [CustomAuthController::class, 'signOut'])->name('signout');
 
 
 Route::get('/push-notificaiton', [\App\Http\Controllers\Backend\DashboardController::class, 'push_notification'])->name('push-notificaiton');
