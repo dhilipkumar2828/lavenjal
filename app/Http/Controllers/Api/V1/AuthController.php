@@ -424,7 +424,7 @@ class AuthController extends Controller
             DB::beginTransaction();
         $validator = Validator::make($request->all(), [
             'name' => 'required',
-            'password' => 'required',
+            'password' => 'nullable',
             'user_type' => 'required',
         ]);
 
@@ -454,7 +454,11 @@ class AuthController extends Controller
         else{
             $input = $request->all();
 
-            $input['password'] = Hash::make($input['password']);
+           if (!empty($request->password)) {
+                $input['password'] = Hash::make($request->password);
+            } else {
+                $input['password'] = null; // or set default value
+            }
             // if($input['user_type']=='customer'){
                 $input['status'] = '1';
             // }else{
