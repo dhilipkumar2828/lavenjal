@@ -168,8 +168,8 @@ $api_list = [
             'name' => 'Product Details',
             'url' => 'v1/product_details/{slug}',
             'method' => 'POST',
-            'payload' => 'user_id: "5"',
-            'description' => 'Get info for one product'
+            'payload' => 'No body needed. Pass product slug in URL only. user_id is taken from Bearer Token automatically. Example: product_details/lavenjal-20ltr-jar',
+            'description' => 'Get full details of a single product. Returns: id, name, image, size, description, type, customer_price, retailer_price, deposit_amount, isProductJar, order_count, user_type, cart_status, cart_qty, wishlist_status.'
         ],
         [
             'name' => 'Most Like Items',
