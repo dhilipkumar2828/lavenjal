@@ -49,15 +49,21 @@ class CartController extends Controller
             
             $current_product = Product::where('id', $request->product_id)->where('type','jar')->exists();
             
-            // if ($current_product && (($is_ordered == 0 && $request->product_qty > 3) || ($is_ordered > 0 && $request->product_qty > 2))) {
-            if ($current_product && $is_ordered == 0 && $request->product_qty > 3) {
-                $success['statuscode'] = 400;
-                $success['message'] = "Limit reached! Your limit is 3 now.";
-
-                $params = [];
-                $success['params'] = $params;
-                $response['response'] = $success;
-                return response()->json($response, 400);
+            // JAR type - 1st order max 3, 2nd order+ max 2
+            if ($current_product) {
+                if ($is_ordered == 0 && $request->product_qty > 3) {
+                    // 1st order - max 3 jars
+                    $success['statuscode'] = 400;
+                    $success['message'] = "Limit reached! Your limit is 3 for first order.";
+                    $params = [];
+                    $success['params'] = $params;
+                    $response['response'] = $success;
+                    return response()->json($response, 400);
+                }
+                // 2nd order onwards - No limit (removed the else if for qty > 2)
+            } else {
+                // Non-JAR products - No specific limit enforced here, allowing up to max_qty (100) in UI
+                // $request->merge(['product_qty' => 1]); // Removed this line to allow more than 1
             }
 
 
@@ -265,12 +271,24 @@ class CartController extends Controller
                     $carts[$key]['is_jar'] = true;
                     $is_jar_available = true;
                     $jar_quantity += $cart->product_qty;
+                    
+                    if ($is_ordered == 0) {
+                        $carts[$key]['default_qty'] = 3;
+                        $carts[$key]['max_qty'] = 3;
+                    } else {
+                        $carts[$key]['default_qty'] = 2; // Updated to 2
+                        $carts[$key]['max_qty'] = 100; // Unlimited practically
+                    }
                 } else if ($is_jar_available == true) {
                     $carts[$key]['is_jar'] = false;
                     $is_jar_available = true;
+                    $carts[$key]['default_qty'] = 1;
+                    $carts[$key]['max_qty'] = 100; // Updated to 100
                 } else {
                     $carts[$key]['is_jar'] = false;
                     $is_jar_available = false;
+                    $carts[$key]['default_qty'] = 1;
+                    $carts[$key]['max_qty'] = 100; // Updated to 100
                 }
 
                 // $is_jar_available=($product->type=="jar" ? true:false);

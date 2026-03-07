@@ -16,14 +16,15 @@ use Exception;
 class WishlistController extends Controller
 {
 
-    public function add_to_wishlist(Request $request)
+    public function add_to_wishlist(Request $request, $product_id = null)
     {
         try{
        $user=Auth::user();
        
+       $product_id = !empty($product_id) ? $product_id : $request->product_id;
        
-       $product=Product::where('id',$request->product_id)->first();
-       $duplicate_check=Wishlists::where('product_id',$request->product_id)->where('customer_id',$user->id)->first();
+       $product=Product::where('id',$product_id)->first();
+       $duplicate_check=Wishlists::where('product_id',$product_id)->where('customer_id',$user->id)->first();
       
     
        if(empty($duplicate_check)){

@@ -54,10 +54,9 @@ class OrderController extends Controller
             '1' => "Any time",
             '2' => "8am - 12pm",
             '3' => "12pm - 8pm",
-            '4' => "8am - 11am",
-            '5' => "11am - 2pm",
-            '6' => "2pm - 5pm",
-            '7' => "5pm - 8pm"
+            '4' => "8am - 12pm",
+            '5' => "12pm - 4pm",
+            '6' => "4pm - 8pm"
         );
         return $timeslot;
     }
@@ -2119,106 +2118,93 @@ class OrderController extends Controller
     {
         try {
             $user = Auth::user();
-            $data = $request->all();
-            if ($request->is_default == 1 || $request->is_default == "true") {
-
-                $default_address = "true";
-            } else {
-                $default_address = "false";
-            }
-
-            if (!empty($user)) {
-                $Dselected_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-                User_address::where('user_id', $user->id)->where('id', '!=', $request->address_id)->update(['is_default' => "false"]);
-
-
-                $address = User_address::where('id', $request->address_id)->update(['is_default' => $default_address, 'full_name' => $request->name, 'door_no' => $request->door_no, 'floor_no' => $request->floor_no, 'flat_no' => $request->flat_no, 'phone_number' => $request->phone_number, 'is_lift' => $request->is_lift, 'address' => $request->address, 'city' => $request->city, 'state' => $request->state, 'zip_code' => $request->zip_code, 'lat' => $request->lat, 'lang' => $request->lang, 'address_type' => $request->address_type, 'full_address' => $request->door_no . ' ' . $request->address . ' ' . $request->city . ' ' . $request->state . ' ' . $request->zip_code]);
-
-
-                $user_address = User_address::where('user_id', $user->id)->get();
-                if (count($user_address) == 1) {
-
-                    User_address::where('user_id', $user->id)->update(['is_default' => "true"]);
-                }
-
-                $selected_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-
-                if (empty($selected_address)) {
-                    $address_id = User_address::select('user_id', 'id')->where('id', '!=', $request->address_id)->where('user_id', $user->id)->first();
-                    if (!empty($address_id)) {
-                        User_address::where('user_id', $user->id)->where('id', $Dselected_address->id)->update(['is_default' => "true"]);
-                    }
-                    $selected_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-                } else {
-                    $selected_address->is_default == "true" ? $selected_address->is_default = true : $selected_address->is_default = false;
-                }
-
-
-
-                $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-                if (!empty($user_address)) {
-                    $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)
-                        ->where('status', 'active')
-                        ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
-                        ->first();
-                } else {
-                    $charges = [];
-                }
-
-                Carts::where('customer_id', $user->id)->update(['delivery_charges' => ((!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00')]);
-
-                $success['statuscode'] = 200;
-                $success['message'] = "Default address updated";
-
-                $params['address_id'] = $request->address_id;
-                $params['is_default'] = $request->is_default;
-                $params['name'] = $request->name;
-                $params['door_no'] = $request->door_no;
-                $params['is_lift'] = $request->is_lift;
-
-                $params['address'] = $request->address;
-                $params['city'] = $request->city;
-                $params['state'] = $request->state;
-                $params['zip_code'] = $request->zip_code;
-                $params['lat'] = $request->lat;
-                $params['lang'] = $request->lang;
-                $params['address_type'] = $request->address_type;
-
-
-                $success['params'] = $params;
-                $success['selected_address'] = $selected_address;
-                $response['response'] = $success;
-                return response()->json($response, 200);
-            } else {
+            if (empty($user)) {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
-                $params = [];
-                $success['params'] = $params;
+                $success['params'] = [];
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
-            $success['statuscode'] = 401;
-            $success['message'] = "Something went wrong";
-            /**
-             * params value (user_id,otp,token)
-             **/
-            $params = [];
+
+            $address_id = $request->address_id;
+            
+            // 1. Fetch the target address to make it default
+            $target_address = User_address::where('id', $address_id)->where('user_id', $user->id)->first();
+            
+            if (empty($target_address)) {
+                $success['statuscode'] = 404;
+                $success['message'] = "Address not found";
+                $success['params'] = [];
+                $response['response'] = $success;
+                return response()->json($response, 200);
+            }
+
+            // 2. Set all other addresses for this user to false
+            User_address::where('user_id', $user->id)->update(['is_default' => "false"]);
+
+            // 3. Set this specific address to true
+            $target_address->is_default = "true";
+            
+            // If other fields are provided in request, update them too, else keep old values
+            if($request->has('name')) $target_address->full_name = $request->name;
+            if($request->has('door_no')) $target_address->door_no = $request->door_no;
+            if($request->has('phone_number')) $target_address->phone_number = $request->phone_number;
+            
+            $target_address->save();
+
+            // 4. Update cart delivery charges based on new default address floor
+            $charges = DeliveryCharges::where('floor_no', $target_address->floor_no)
+                ->where('status', 'active')
+                ->selectRaw("IF(is_discount = 'true', 0, amount) as amount, is_discount")
+                ->first();
+
+            $delivery_charge_amount = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+            Carts::where('customer_id', $user->id)->update(['delivery_charges' => $delivery_charge_amount]);
+
+            $success['statuscode'] = 200;
+            $success['message'] = "Default address updated";
+
+            $params['address_id'] = $target_address->id;
+            $params['is_default'] = true;
+            $params['name'] = $target_address->full_name;
+            $params['door_no'] = $target_address->door_no;
+            $params['city'] = $target_address->city;
+            $params['lat'] = $target_address->lat;
+            $params['lang'] = $target_address->lang;
+
             $success['params'] = $params;
+            $success['selected_address'] = $target_address;
             $response['response'] = $success;
-            return response()->json($response, 401);
+            return response()->json($response, 200);
+
+        } catch (Exception $e) {
+            $success['statuscode'] = 500;
+            $success['message'] = "Something went wrong: " . $e->getMessage();
+            $success['params'] = [];
+            $response['response'] = $success;
+            return response()->json($response, 200);
         }
     }
 
-    public function delete_user_address(Request $request)
+    public function delete_user_address(Request $request, $id)
     {
         try {
-
             $user = Auth::user();
             if (!empty($user)) {
-                $check_address = User_address::where('id', $request->id)->where('user_id', $user->id)->first();
-                $address = User_address::where('id', $request->id)->where('user_id', $user->id)->delete();
-                if ($check_address->is_default == "true") {
+                $check_address = User_address::where('id', $id)->where('user_id', $user->id)->first();
+                
+                if (empty($check_address)) {
+                    $success['statuscode'] = 404;
+                    $success['message'] = "Address not found for ID: " . $id;
+                    $success['params'] = ['id' => $id];
+                    $response['response'] = $success;
+                    return response()->json($response, 200);
+                }
+
+                $is_default = $check_address->is_default;
+                $check_address->delete();
+
+                if ($is_default == "true") {
                     $address_id = User_address::select('user_id', 'id')->where('user_id', $user->id)->first();
                     if (!empty($address_id)) {
                         User_address::where('user_id', $user->id)->where('id', $address_id->id)->update(['is_default' => "true"]);
@@ -2226,7 +2212,7 @@ class OrderController extends Controller
                 }
                 $success['statuscode'] = 200;
                 $success['message'] = "Address deleted successfully";
-                $params['id'] = $request->id;
+                $params['id'] = $id;
                 $success['params'] = $params;
                 $response['response'] = $success;
                 return response()->json($response, 200);

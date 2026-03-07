@@ -63,7 +63,7 @@ class ProductController extends Controller
        //  $user_id=$request->user_id;
        $user=Auth::user();
       $url=url('/');
-        $products=Product::select('id','name','image','size','slug')->orderBy('orderby','asc')->where('status','active');
+        $products=Product::select('id','name','image','size','slug','type','customer_price','retailer_price','deposit_amount')->orderBy('orderby','asc')->where('status','active');
         
         if($user->user_type!="customer"){
             $products->where('type','bottle');
@@ -72,31 +72,54 @@ class ProductController extends Controller
 
         foreach($products as $product){
            $product['image']=$url."/".$product['image'];
-        //   if(!empty($user_id)){
-        //       $cart=Carts::where('product_id',$product->id)->where('customer_id',$user_id)->first();
-        //       $wishlists=Wishlists::where('product_id',$product->id)->where('customer_id',$user_id)->first();
-        //         if(!empty($wishlists)){
-        //           $product['wishlist_status']="true";
-        //       }else{
-        //           $product['wishlist_status']="false";
-        //       }
-               
-        //       if(!empty($cart)){
-        //           $product['cart_status']="true";
-        //           $product['cart_qty']=$cart->product_qty;
-        //       }else{
-        //           $product['cart_status']="false";
-        //           $product['cart_qty']=0;
-        //       }
-        //     }else{
-        //          $success['statuscode'] =401;
-        //          $params=[];
-        //          $success['params']=$params;
-        //          $success['message']="User not found";
-        //          $response['response']=$success;
-        //          return response()->json($response, 200);
-        //          }
-        $product->user_type=Auth::user()->user_type;
+           
+           // Wishlist check
+           $wishlists = Wishlists::where('product_id', $product->id)
+                                  ->where('customer_id', $user->id)
+                                  ->first();
+           $product['wishlist_status'] = !empty($wishlists) ? "true" : "false";
+
+           // Cart check
+           $cart = Carts::where('product_id', $product->id)
+                        ->where('customer_id', $user->id)
+                        ->first();
+           if(!empty($cart)){
+               $product['cart_status'] = "true";
+               $product['cart_qty']    = $cart->product_qty;
+           } else {
+               $product['cart_status'] = "false";
+               $product['cart_qty']    = 0;
+           }
+
+            // 1. Jar count calculations for this user
+            $is_ordered = 0;
+            $order_list = Order::where('customer_id', $user->id)->get();
+            foreach ($order_list as $ord) {
+                $ord_products = Orderproducts::where('order_id', $ord->id)->first();
+                if (!empty($ord_products)) {
+                    $ord_product = Product::where('id', $ord_products->product_id)->first();
+                    if (!empty($ord_product) && $ord_product->type == 'jar') {
+                        $is_ordered += 1;
+                    }
+                }
+            }
+
+            $product['order_count'] = $is_ordered;
+            $product->user_type = $user->user_type;
+
+            // 2. Adding default and max quantity limits for UI
+            if ($product->type == 'jar') {
+                if ($is_ordered == 0) {
+                    $product['default_qty'] = 3;
+                    $product['max_qty'] = 3;
+                } else {
+                    $product['default_qty'] = 2;
+                    $product['max_qty'] = 100; // Unlimited practically
+                }
+            } else {
+                $product['default_qty'] = 1;
+                $product['max_qty'] = 100; // Updated to 100 as requested
+            }
         }
           $params=[];
         $success['statuscode'] =200;
@@ -182,6 +205,20 @@ class ProductController extends Controller
             // 6. Set order count and user type
             $product['order_count'] = $is_ordered;
             $product['user_type']   = $user->user_type;
+
+            // Adding default and max quantity limits for UI
+            if ($product->type == 'jar') {
+                if ($is_ordered == 0) {
+                    $product['default_qty'] = 3;
+                    $product['max_qty'] = 3;
+                } else {
+                    $product['default_qty'] = 2;
+                    $product['max_qty'] = 100; // Unlimited practically
+                }
+            } else {
+                $product['default_qty'] = 1;
+                $product['max_qty'] = 100; // Updated to 100 as requested
+            }
 
             // 7. Cart status (null-safe)
             $cart = Carts::where('product_id', $product->id)

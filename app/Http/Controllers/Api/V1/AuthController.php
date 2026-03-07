@@ -191,19 +191,10 @@ class AuthController extends Controller
                          
                     $details['otp_code']=$otp;
                     $details['email']=$user_id->email;
-                    // $valid_mail= ;
                     dispatch(new \App\Jobs\OtpEmailJob($details));
                     
-                $key = "QgR0kyTsNbOWkDU1";	
-                $mbl=$request->phone; 	/*or $mbl="XXXXXXXXXX,XXXXXXXXXX";*/
-                $message_content=urlencode("From LaVenjal - Welcome to BHUVIJ NOURISHMENTS PRIVATE LIMITED. Please use this OTP : ".$otp." to continue login. Do Not share your OTP with anyone. BHUVIJ");
-                
-                $senderid="BHUVIJ";	$route= 1;
-                $templateid="1707168838968916653";
-                $url = "https://sms.textspeed.in/vb/apikey.php?apikey=$key&senderid=$senderid&templateid=$templateid&number=$mbl&message=$message_content";
-                					
-                $output = file_get_contents($url);	/*default function for push any url*/
-
+                    // SMS background job la dispatch panrom - API quick-ah respond aagum
+                    dispatch(new \App\Jobs\SendSmsJob($request->phone, $otp));
 
                     $success['statuscode'] =200;
                     $success['message']="Otp sent successfully";
@@ -424,7 +415,6 @@ class AuthController extends Controller
             DB::beginTransaction();
         $validator = Validator::make($request->all(), [
             'name' => 'required',
-            'password' => 'nullable',
             'user_type' => 'required',
         ]);
 
@@ -504,27 +494,49 @@ class AuthController extends Controller
                 }
             }
             $user = User::create($input);
-            $useraddress=json_decode($request->address);
+            
+            // Check for both 'address' (lowercase) and 'Address' (Capital)
+            $addressData = $request->address ?? $request->Address;
+            
+            if (is_array($addressData)) {
+                $useraddress = (object) $addressData;
+            } else {
+                $useraddress = json_decode($addressData);
+            }
+
+            if (empty($useraddress)) {
+                $msg = "The 'address' field is required and must be a valid JSON string.";
+                throw new \Exception($msg);
+            }
 
             //User_address
             $checkuser_address=User_address::where('user_id',$user->id)->first();
             $user_address=new User_address;
             $user_address->user_id=$user->id;
             $user_address->full_name=$request->name;
-            $user_address->door_no=$useraddress->door_no;
+            $user_address->door_no=(!empty($useraddress->shop_no)?$useraddress->shop_no:(!empty($useraddress->door_no)?$useraddress->door_no:''));
             $user_address->flat_no=(!empty($useraddress->flat_no)?$useraddress->flat_no:'');
             $user_address->floor_no=(!empty($useraddress->floor_no)?$useraddress->floor_no:'');
             $user_address->phone_number=(!empty($useraddress->phone_number)?$useraddress->phone_number:'');
-            $user_address->is_lift=($useraddress->is_lift =="0" ?"false" : "true");
-            $user_address->address=$useraddress->address;
-            $user_address->city=$useraddress->city;
-            $user_address->state=$useraddress->state;
-            $user_address->zip_code=$useraddress->zip_code;
-            $user_address->lat=$useraddress->lat;
-            $user_address->lang=$useraddress->lang;
+            $user_address->is_lift=(isset($useraddress->is_lift) && $useraddress->is_lift =="0" ?"false" : "true");
+            $user_address->address=(!empty($useraddress->address)?$useraddress->address:'');
+            $user_address->city=(!empty($useraddress->city)?$useraddress->city:'');
+            $user_address->state=(!empty($useraddress->state)?$useraddress->state:'');
+            $user_address->zip_code=(!empty($useraddress->zip_code)?$useraddress->zip_code:'');
+            $user_address->lat=(!empty($useraddress->lat)?$useraddress->lat:'');
+            $user_address->lang=(!empty($useraddress->lang)?$useraddress->lang:'');
             $user_address->is_default="true";
-            $user_address->full_address=$useraddress->door_no.' '.$useraddress->address.' '.$useraddress->city.' '.$useraddress->state.' '.$useraddress->zip_code;
-            $user_address->address_type=$useraddress->address_type;
+            
+            $full_address = [];
+            if(!empty($useraddress->shop_no)) $full_address[] = $useraddress->shop_no;
+            elseif(!empty($useraddress->door_no)) $full_address[] = $useraddress->door_no;
+            if(!empty($useraddress->address)) $full_address[] = $useraddress->address;
+            if(!empty($useraddress->city)) $full_address[] = $useraddress->city;
+            if(!empty($useraddress->state)) $full_address[] = $useraddress->state;
+            if(!empty($useraddress->zip_code)) $full_address[] = $useraddress->zip_code;
+            $user_address->full_address=implode(' ', $full_address);
+            
+            $user_address->address_type=(!empty($useraddress->address_type)?$useraddress->address_type:'');
             $user_address->save();
             
 
@@ -542,18 +554,27 @@ class AuthController extends Controller
                   $owner_meta_data->ownership_type=$request->ownership_status; 
                   $owner_meta_data->delivery_type=$request->delivery_facility; 
                   $owner_meta_data->no_of_delivery_boys=$request->no_of_delivery_persons; 
-                  $owner_meta_data->gst_certificate= $input['gst_certificate']; 
-                  $owner_meta_data->govt_certificate= $input['govt_certificate']; 
-                  $owner_meta_data->shop_photo= $input['shop_photo']; 
+                  $owner_meta_data->gst_certificate= (!empty($input['gst_certificate']) ? $input['gst_certificate'] : ""); 
+                  $owner_meta_data->govt_certificate= (!empty($input['govt_certificate']) ? $input['govt_certificate'] : ""); 
+                  $owner_meta_data->shop_photo= (!empty($input['shop_photo']) ? $input['shop_photo'] : ""); 
                   $owner_meta_data->name_of_shop=$request->shop_name; 
                 }
                 $owner_meta_data->name_of_owner=$request->name;
                 $owner_meta_data->owner_contact_no=$request->phone;
                 $owner_meta_data->owner_email=$request->email;
-                $owner_meta_data->pincode=$useraddress->zip_code;
-                $owner_meta_data->full_address=$useraddress->door_no.' '.$useraddress->address.' '.$useraddress->city.' '.$useraddress->state.' '.$useraddress->zip_code;
-                $owner_meta_data->lat=$useraddress->lat;
-                $owner_meta_data->lang=$useraddress->lang;
+                $owner_meta_data->pincode=(!empty($useraddress->zip_code) ? $useraddress->zip_code : "");
+                
+                $meta_address = [];
+                if(!empty($useraddress->shop_no)) $meta_address[] = $useraddress->shop_no;
+                elseif(!empty($useraddress->door_no)) $meta_address[] = $useraddress->door_no;
+                if(!empty($useraddress->address)) $meta_address[] = $useraddress->address;
+                if(!empty($useraddress->city)) $meta_address[] = $useraddress->city;
+                if(!empty($useraddress->state)) $meta_address[] = $useraddress->state;
+                if(!empty($useraddress->zip_code)) $meta_address[] = $useraddress->zip_code;
+                $owner_meta_data->full_address=implode(' ', $meta_address);
+                
+                $owner_meta_data->lat=(!empty($useraddress->lat) ? $useraddress->lat : "");
+                $owner_meta_data->lang=(!empty($useraddress->lang) ? $useraddress->lang : "");
                 
                 $owner_meta_data->save();
              }
@@ -597,24 +618,25 @@ class AuthController extends Controller
              $params['ownership_status']=$request->ownership_status;
              $params['delivery_facility']=$request->delivery_facility;
              $params['no_of_delivery_persons']=$request->no_of_delivery_persons;
-             $params['gst_certificate']=$input['gst_certificate'];
-             $params['govt_certificate']=$input['govt_certificate'];
-             $params['shop_photo']=$input['shop_photo'];
-             $params['aadhar_number']=$input['aadhar_number'];
-             $params['landmark']=$input['landmark'];
+             $params['gst_certificate']=(!empty($input['gst_certificate']) ? $input['gst_certificate'] : "");
+             $params['govt_certificate']=(!empty($input['govt_certificate']) ? $input['govt_certificate'] : "");
+             $params['shop_photo']=(!empty($input['shop_photo']) ? $input['shop_photo'] : "");
+             $params['aadhar_number']=(!empty($input['aadhar_number']) ? $input['aadhar_number'] : "");
+             $params['landmark']=(!empty($input['landmark']) ? $input['landmark'] : "");
             }
 
             $address['full_name']=$request->name;
-            $address['door_no']=$useraddress->door_no;
-            $address['is_lift']=$useraddress->is_lift;
-            $address['address']=$useraddress->address;
-            $address['city']=$useraddress->city;
-            $address['state']=$useraddress->state;
-            $address['zip_code']=$useraddress->zip_code;
-            $address['lat']=$useraddress->lat;
-            $address['lang']=$useraddress->lang;
+            $address['shop_no']=(!empty($useraddress->shop_no) ? $useraddress->shop_no : "");
+            $address['door_no']=(!empty($useraddress->shop_no) ? $useraddress->shop_no : (!empty($useraddress->door_no) ? $useraddress->door_no : ""));
+            $address['is_lift']=(!empty($useraddress->is_lift) ? $useraddress->is_lift : "");
+            $address['address']=(!empty($useraddress->address) ? $useraddress->address : "");
+            $address['city']=(!empty($useraddress->city) ? $useraddress->city : "");
+            $address['state']=(!empty($useraddress->state) ? $useraddress->state : "");
+            $address['zip_code']=(!empty($useraddress->zip_code) ? $useraddress->zip_code : "");
+            $address['lat']=(!empty($useraddress->lat) ? $useraddress->lat : "");
+            $address['lang']=(!empty($useraddress->lang) ? $useraddress->lang : "");
             $address['is_default']=(!empty($useraddress->is_default) ? $useraddress->is_default:'');
-            $address['address_type']=$useraddress->address_type;
+            $address['address_type']=(!empty($useraddress->address_type) ? $useraddress->address_type : "");
             
             $success['params']=$params;
             $success['address']=$address;
@@ -622,7 +644,9 @@ class AuthController extends Controller
             
         //   Helper::SendNotification("Registration","New ".$user->user_type ." found");
         $admin=User::select('id','user_type','name')->where('user_type','admin')->first();
+        if(!empty($admin)){
              Helper::SendNotification("Hi ".$admin->name."","Your Order status changed successfully","register",$user->id,$user->id);
+        }
              
 
            DB::commit();
@@ -630,13 +654,16 @@ class AuthController extends Controller
         }
         }
         catch(Exception $e){
+        DB::rollBack();
         $success['statuscode'] =401;
-        $success['message']="Something went wrong";
+        $success['message']="Something went wrong: " . $e->getMessage();
         /**
          * params value (user_id,otp,token)
         **/
           $params=[];
           $success['params']=$params;
+          $success['error_line'] = $e->getLine();
+          $success['error_file'] = $e->getFile();
           $response['response']=$success;
           return response()->json($response, 401);
         }

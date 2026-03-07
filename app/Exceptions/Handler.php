@@ -43,8 +43,53 @@ class Handler extends ExceptionHandler
      */
     public function register()
     {
-        $this->reportable(function (Throwable $e) {
+        $this->reportable(function (\Throwable $e) {
             //
         });
+    }
+
+    /**
+     * Render an exception into an HTTP response.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Throwable  $e
+     * @return \Symfony\Component\HttpFoundation\Response
+     *
+     * @throws \Throwable
+     */
+    public function render($request, \Throwable $e)
+    {
+        if ($request->is('api/*')) {
+            $status = 500;
+            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface) {
+                $status = $e->getStatusCode();
+            } elseif ($e instanceof \Illuminate\Auth\AuthenticationException) {
+                $status = 401;
+            }
+            
+            if ($e instanceof \Laravel\Passport\Exceptions\OAuthServerException) {
+                \Illuminate\Support\Facades\Log::error('Passport OAuth Error:', [
+                    'Message' => $e->getMessage(),
+                    'Hint' => $e->getHint(),
+                    'Auth' => $request->header('Authorization')
+                ]);
+            }
+
+            \Illuminate\Support\Facades\Log::error('API Error:', [
+                'Status' => $status,
+                'Message' => $e->getMessage(),
+                'Auth' => $request->header('Authorization'),
+                'Exception' => get_class($e)
+            ]);
+            return response()->json([
+                'response' => [
+                    'statuscode' => $status,
+                    'message' => ($status == 401) ? 'Unauthenticated or Invalid Token' : ($e->getMessage() ?: 'Something went wrong'),
+                    'error' => true
+                ]
+            ], $status);
+        }
+
+        return parent::render($request, $e);
     }
 }
