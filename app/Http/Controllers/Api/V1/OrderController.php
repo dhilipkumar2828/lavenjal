@@ -2042,6 +2042,54 @@ class OrderController extends Controller
         }
     }
 
+    public function update_user_address(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+            if (!empty($user)) {
+                $address = User_address::where('id', $id)->where('user_id', $user->id)->first();
+                if (empty($address)) {
+                    $success['statuscode'] = 404;
+                    $success['message'] = "Address not found";
+                    $response['response'] = $success;
+                    return response()->json($response, 200);
+                }
+
+                $data = $request->all();
+                
+                if (isset($data['is_default']) && $data['is_default'] == "true") {
+                    User_address::where('user_id', $user->id)->where('id', '!=', $id)->update(['is_default' => "false"]);
+                }
+
+                // Building full_address if relevant parts are provided
+                $door_no = $request->door_no ?? $address->door_no;
+                $addr = $request->address ?? $address->address;
+                $city = $request->city ?? $address->city;
+                $state = $request->state ?? $address->state;
+                $zip = $request->zip_code ?? $address->zip_code;
+                $data['full_address'] = $door_no . ' ' . $addr . ' ' . $city . ' ' . $state . ' ' . $zip;
+
+                $address->update($data);
+
+                $success['statuscode'] = 200;
+                $success['message'] = "Address updated successfully";
+                $success['address'] = User_address::find($id);
+                $response['response'] = $success;
+                return response()->json($response, 200);
+            } else {
+                $success['statuscode'] = 401;
+                $success['message'] = "Please login";
+                $response['response'] = $success;
+                return response()->json($response, 401);
+            }
+        } catch (Exception $e) {
+            $success['statuscode'] = 500;
+            $success['message'] = "Something went wrong: " . $e->getMessage();
+            $response['response'] = $success;
+            return response()->json($response, 500);
+        }
+    }
+
     public function get_user_address(Request $request)
     {
         try {

@@ -61,6 +61,7 @@ Route::group([
     
     
     Route::post('user_address', [OrderController::class, 'user_address']);
+    Route::patch('update_user_address/{id}', [OrderController::class, 'update_user_address']);
     Route::get('get_user_address', [OrderController::class, 'get_user_address']);
     Route::post('delete_user_address/{id}', [OrderController::class, 'delete_user_address']);
     Route::post('update_defaultaddress', [OrderController::class, 'update_defaultaddress']);
