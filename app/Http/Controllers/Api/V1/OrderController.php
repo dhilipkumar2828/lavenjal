@@ -81,7 +81,8 @@ class OrderController extends Controller
         $response_a = json_decode($response, true);
         if (isset($response_a['rows'][0]['elements'][0]['distance']['text'])) {
             $m = $response_a['rows'][0]['elements'][0]['distance']['text'];
-        } else {
+        }
+        else {
             $m = 0;
         }
 
@@ -208,7 +209,7 @@ class OrderController extends Controller
             $isOrderAlreadyExist = Order::where('order_id', $orderId)->exists();
 
             // ----------------------------------------------- Creating Order --------------------------------------------------------------
-            Owner_meta_data::select('assigned_distributor')->where('user_id', $user_details->id)->first();Owner_meta_data::select('assigned_distributor')->where('user_id', $user_details->id)->first();
+            $owners_meta_data = Owner_meta_data::select('assigned_distributor')->where('user_id', $user_details->id)->first();
             // $orderid = Str::upper('LVJ-' . Str::random(6));
             $order = new Order;
             $order->order_id = $orderId;
@@ -221,7 +222,8 @@ class OrderController extends Controller
             // $order->total=round(($subamt + $depositamt+$deliveramt));
             if (empty($request->payment_response)) {
                 $order->payment_status = "unpaid";
-            } else {
+            }
+            else {
                 $order->payment_status = "paid";
             }
             $order->assigned_distributor = (!empty($owners_meta_data->assigned_distributor) ? $owners_meta_data->assigned_distributor : '');
@@ -248,7 +250,8 @@ class OrderController extends Controller
             foreach ($carts as $cart) {
                 if ($jar_product_ids->contains($cart->product_id)) {
                     $jar_quantity += $cart->product_qty;
-                } else {
+                }
+                else {
                     $quantity += $cart->product_qty;
                 }
 
@@ -291,7 +294,8 @@ class OrderController extends Controller
 
             if ($jar_quantity > 0) {
                 $deliveramt = $jar_quantity * (!empty($get_shipadd) ? $get_shipadd->amount : 0);
-            } else {
+            }
+            else {
                 $deliveramt = !empty($get_shipadd) ? $get_shipadd->amount : 0;
             }
 
@@ -366,7 +370,8 @@ class OrderController extends Controller
             // Log and return successful response
             Log::info('Payment initiated successfully.', $decodedResponse);
             return response()->json(json_decode($response, true), 200);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             // Handle general exceptions
             Log::error('Payment initiation failed.', [
                 'message' => $e->getMessage(),
@@ -426,10 +431,12 @@ class OrderController extends Controller
 
                 if (!empty($pincode)) {
                     $selectedAddress->isServiceAvailable = true;
-                } else {
+                }
+                else {
                     $selectedAddress->isServiceAvailable = false;
                 }
-            } else {
+            }
+            else {
                 $get_shipadd = [];
             }
             $products = [];
@@ -492,7 +499,8 @@ class OrderController extends Controller
 
             $response['response'] = $success;
             return response()->json($response, 200);
-        } else {
+        }
+        else {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -527,7 +535,8 @@ class OrderController extends Controller
                     ->where('status', 'active')
                     ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
                     ->first();
-            } else {
+            }
+            else {
                 $get_shipadd = [];
             }
 
@@ -545,10 +554,10 @@ class OrderController extends Controller
                 $returnablejar_qty += $cart->returnablejar_qty;
                 $total_available_jar = $cart->total_available_jar;
                 $discountamt += $cart->discount_amount;
-                //  $deliveramt=$cart->delivery_charges;
+            //  $deliveramt=$cart->delivery_charges;
             }
 
-            if ($request->is_reschedule === false) {
+            if (!$request->boolean('is_reschedule')) {
                 Order::where('order_id', $orderid)->update(['payment_response' => $request->payment_response, 'payment_status' => 'paid']);
 
                 $orderData = Order::select('id')->where('order_id', $orderid)->first();
@@ -604,12 +613,14 @@ class OrderController extends Controller
                 // }
                 // Helper::SendNotification($order->order_id,"Order placed from ".$user->name."","checkout_retailer",$order->id,$user->id);
                 Helper::live_notification();
-            } else {
+            }
+            else {
                 $check_order = Order::find($request->order_id);
                 if (!empty($check_order)) {
                     if ($check_order->status == "Order placed") {
                         $order = Order::where('id', $request->order_id)->update(['delivery_time' => $this->time_slot($request->delivery_time), 'delivery_date' => $request->delivery_date]);
-                    } else {
+                    }
+                    else {
                         $success['statuscode'] = 200;
                         $success['message'] = "Status changed to " . $check_order->status . "";
                         /**
@@ -699,7 +710,8 @@ class OrderController extends Controller
             $response['response'] = $success;
 
             return response()->json($response, 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -982,39 +994,66 @@ class OrderController extends Controller
             if ($user->user_type == 'delivery_agent')
                 $user_filter_type = "assigned_deliveryboy";
 
-            $orders = Order::select('order_id', 'total', 'created_at', 'delivery_date', 'status', 'id', 'delivery_time')->where($user_filter_type, $user->id)->orderBy('id', 'desc')->where('payment_status', 'paid')->get();
+            $orders = Order::select('order_id', 'total', 'created_at', 'delivery_date', 'status', 'id', 'delivery_time', 'payment_status')->where($user_filter_type, $user->id)->orderBy('id', 'desc')->where('payment_status', 'paid')->get();
 
-            $track_orders = Order::select('order_id', 'total', 'created_at', 'delivery_date', 'status', 'id', 'delivery_time')->where($user_filter_type, $user->id)->orderBy('id', 'desc')->where('status', '!=', 'Delivery')->where('payment_status', 'paid')->get();
+            $track_orders = Order::select('order_id', 'total', 'created_at', 'delivery_date', 'status', 'id', 'delivery_time', 'payment_status')->where($user_filter_type, $user->id)->orderBy('id', 'desc')->where('status', '!=', 'Delivery')->where('payment_status', 'paid')->get();
+
+            $url = url('/');
+            $today = Carbon::today()->format('d-m-Y');
+            $tomorrow = Carbon::tomorrow()->format('d-m-Y');
 
             foreach ($orders as $key => $order) {
-
-                //$selectedSlot=$this->time_slot(array_keys($order->delivery_time));
                 $arrays = array_flip($this->time());
+                $orders[$key]['selecedSlot'] = isset($arrays[$order->delivery_time]) ? $arrays[$order->delivery_time] : null;
 
-                $orders[$key]['selecedSlot'] = $arrays[$order->delivery_time];
+                // Human friendly date
+                if ($order->delivery_date == $today) {
+                    $orders[$key]['delivery_day'] = "Today";
+                }
+                elseif ($order->delivery_date == $tomorrow) {
+                    $orders[$key]['delivery_day'] = "Tomorrow";
+                }
+                else {
+                    $orders[$key]['delivery_day'] = $order->delivery_date;
+                }
+
                 $itemscnt = 0;
-                $ord = Orderproducts::where('order_id', $order->id)->get();
-                foreach ($ord as $o) {
+                $product_list = [];
+                $ord_products = Orderproducts::where('order_id', $order->id)->get();
 
-
-                    $order_products = Orderproducts::find($o->id);
-                    foreach ($order_products->product as $product) {
-                        if ($product->type == "jar") {
-                            $itemscnt += $order_products->quantity;
-                        }
+                foreach ($ord_products as $o) {
+                    $itemscnt += $o->quantity;
+                    $p = Product::find($o->product_id);
+                    if ($p) {
+                        $product_list[] = [
+                            'name' => $p->name,
+                            'image' => $url . '/' . $p->image,
+                            'qty' => $o->quantity,
+                            'size' => $p->size,
+                            'amount' => $o->amount,
+                            'total_amount' => $o->total_amount
+                        ];
                     }
                 }
-                // $order_product = Orderproducts::where('order_id', $order->id)->sum('quantity');
+
                 $sum_jar = Orderproducts::where('order_id', $order->id)->sum('no_of_jars_returned');
-
-
-
 
                 $orders[$key]['items_count'] = $itemscnt;
                 $orders[$key]['no_of_returnable_jar'] = $sum_jar;
-                if ($order->status == "Delivery") {
+                $orders[$key]['products'] = $product_list;
+
+                // UI Friendly Status
+                if ($order->status == "Order placed") {
+                    $orders[$key]['display_status'] = "Processing";
+                }
+                elseif ($order->status == "Delivery") {
+                    $orders[$key]['display_status'] = "Delivered";
                     $order->status = "Delivered";
                 }
+                else {
+                    $orders[$key]['display_status'] = $order->status;
+                }
+
                 $orders[$key]['created_date'] = $order->delivery_date;
                 $orders[$key]['ord_id'] = $order['order_id'];
                 $orders[$key]['order_id'] = $order['id'];
@@ -1026,28 +1065,57 @@ class OrderController extends Controller
 
 
             foreach ($track_orders as $key => $order) {
+                $arrays = array_flip($this->time());
+                $track_orders[$key]['selecedSlot'] = isset($arrays[$order->delivery_time]) ? $arrays[$order->delivery_time] : null;
+
+                // Human friendly date
+                if ($order->delivery_date == $today) {
+                    $track_orders[$key]['delivery_day'] = "Today";
+                }
+                elseif ($order->delivery_date == $tomorrow) {
+                    $track_orders[$key]['delivery_day'] = "Tomorrow";
+                }
+                else {
+                    $track_orders[$key]['delivery_day'] = $order->delivery_date;
+                }
 
                 $itemscnt = 0;
-                $ord = Orderproducts::where('order_id', $order->id)->get();
-                foreach ($ord as $o) {
-                    $order_products = Orderproducts::find($o->id);
-                    foreach ($order_products->product as $product) {
-                        if ($product->type == "jar") {
-                            $itemscnt += $order_products->quantity;
-                        }
+                $product_list = [];
+                $ord_products = Orderproducts::where('order_id', $order->id)->get();
+
+                foreach ($ord_products as $o) {
+                    $itemscnt += $o->quantity;
+                    $p = Product::find($o->product_id);
+                    if ($p) {
+                        $product_list[] = [
+                            'name' => $p->name,
+                            'image' => $url . '/' . $p->image,
+                            'qty' => $o->quantity,
+                            'size' => $p->size,
+                            'amount' => $o->amount,
+                            'total_amount' => $o->total_amount
+                        ];
                     }
                 }
-                // $order_product = Orderproducts::where('order_id', $order->id)->sum('quantity');
+
                 $sum_jar = Orderproducts::where('order_id', $order->id)->sum('no_of_jars_returned');
-
-
-
 
                 $track_orders[$key]['items_count'] = $itemscnt;
                 $track_orders[$key]['no_of_returnable_jar'] = $sum_jar;
-                if ($order->status == "Delivery") {
+                $track_orders[$key]['products'] = $product_list;
+
+                // UI Friendly Status
+                if ($order->status == "Order placed") {
+                    $track_orders[$key]['display_status'] = "Processing";
+                }
+                elseif ($order->status == "Delivery") {
+                    $track_orders[$key]['display_status'] = "Delivered";
                     $order->status = "Delivered";
                 }
+                else {
+                    $track_orders[$key]['display_status'] = $order->status;
+                }
+
                 $track_orders[$key]['created_date'] = $order->delivery_date;
                 $track_orders[$key]['ord_id'] = $order['order_id'];
                 $track_orders[$key]['order_id'] = $order['id'];
@@ -1067,7 +1135,8 @@ class OrderController extends Controller
 
             $response['response'] = $success;
             return response()->json($response, 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -1081,70 +1150,110 @@ class OrderController extends Controller
     }
 
 
-    public function order_details(Request $request)
+    public function order_details(Request $request, $order_id)
     {
         try {
             $user = Auth::user();
 
-            $orders = Order::select('order_id', 'sub_total', 'tax_rate', 'created_at', 'status', 'total', 'deposit_amount', 'discount_amount', 'deliver_charge', 'id', 'delivery_date', 'delivery_time', 'returnablejar_qty', 'customer_id')->where('id', $request->order_id)->orderBy('id', 'desc')->first();
+            $orders = Order::select('order_id', 'sub_total', 'tax_rate', 'created_at', 'status', 'total', 'deposit_amount', 'discount_amount', 'deliver_charge', 'id', 'delivery_date', 'delivery_time', 'returnablejar_qty', 'customer_id', 'payment_status', 'selected_address_id')->where('id', $order_id)->orderBy('id', 'desc')->first();
+
+            if (empty($orders)) {
+                return response()->json([
+                    'response' => [
+                        'statuscode' => 401,
+                        'message' => "Order not found",
+                        'params' => ['order_id' => $order_id],
+                    ]
+                ], 401);
+            }
 
             $customer = User::select('id', 'name')->where('id', $orders->customer_id)->first();
-            $orders['customer_name'] = $customer->name;
+            $orders['customer_name'] = $customer ? $customer->name : 'N/A';
 
 
             if (!empty($orders)) {
-                $itemscnt = 0;
-                $ord = Orderproducts::where('order_id', $request->order_id)->get();
-                foreach ($ord as $o) {
-                    $order_product = Orderproducts::find($o->id);
-                    foreach ($order_product->product as $key => $product) {
-                        if ($product->type == "jar") {
-                            $itemscnt += $order_product->quantity;
-                        }
-                    }
+                $today = Carbon::today()->format('d-m-Y');
+                $tomorrow = Carbon::tomorrow()->format('d-m-Y');
+
+                // Human friendly date
+                if ($orders->delivery_date == $today) {
+                    $orders['delivery_day'] = "Today";
                 }
-                // $no_of_jars_ordered = Orderproducts::where('order_id', $request->order_id)->sum('quantity');
+                elseif ($orders->delivery_date == $tomorrow) {
+                    $orders['delivery_day'] = "Tomorrow";
+                }
+                else {
+                    $orders['delivery_day'] = $orders->delivery_date;
+                }
+
+                // UI Friendly Status
+                if ($orders->status == "Order placed") {
+                    $orders['display_status'] = "Processing";
+                }
+                elseif ($orders->status == "Delivery") {
+                    $orders['display_status'] = "Delivered";
+                }
+                else {
+                    $orders['display_status'] = $orders->status;
+                }
+
+                $itemscnt = 0;
+                $ord = Orderproducts::where('order_id', $order_id)->get();
+                foreach ($ord as $o) {
+                    $itemscnt += $o->quantity;
+                }
+
                 $sum_jar = Orderproducts::where('order_id', $orders->id)->sum('no_of_jars_returned');
                 $orders->items_count = $itemscnt;
                 $orders->no_of_returnable_jar = $sum_jar;
 
-
-                $ship_address = ShippingAddress::where('order_id', $orders->id)->first();
-
-                $user_address = User_address::where('id', $ship_address->address_id)->first();
+                $user_address = User_address::where('id', $orders->selected_address_id)->first();
                 if (!empty($user_address)) {
                     $orders['address'] = $user_address->address . ', ' . $user_address->city . ', ' . $user_address->state . ', ' . $user_address->zip_code;
-                } else {
+                    $orders['full_address_details'] = [
+                        'door_no' => $user_address->door_no,
+                        'address' => $user_address->address,
+                        'city' => $user_address->city,
+                        'state' => $user_address->state,
+                        'zip_code' => $user_address->zip_code,
+                        'floor_no' => $user_address->floor_no
+                    ];
+                }
+                else {
                     $orders['address'] = "";
+                    $orders['full_address_details'] = null;
                 }
 
-                $orders['floor_no'] = $user_address->floor_no;
+                $orders['floor_no'] = isset($user_address) ? $user_address->floor_no : '';
                 $orders['created_date'] = $orders->delivery_date;
             }
 
-            $orderdetails = OrderProducts::where('order_id', $request->order_id)->get();
+            $orderdetails = OrderProducts::where('order_id', $order_id)->get();
             $productdetails = [];
             $url = url('/');
             foreach ($orderdetails as $key => $orderdetail) {
                 $product = Product::where('id', $orderdetail->product_id)->first();
                 if (!empty($product)) {
                     $img = $url . '/' . $product->image;
-                } else {
+                }
+                else {
                     $img = "";
                 }
                 $productdetails[$key]['product_img'] = $img;
                 $productdetails[$key]['product_name'] = (!empty($product) ? $product->name : '');
+                $productdetails[$key]['product_size'] = (!empty($product) ? $product->size : '');
                 $productdetails[$key]['amount'] = $orderdetail->amount;
                 $productdetails[$key]['product_qty'] = $orderdetail->quantity;
+                $productdetails[$key]['total_amount'] = $orderdetail->total_amount;
                 $productdetails[$key]['returnablejar_qty'] = $orderdetail->returnablejar_qty;
             }
 
-            $ord_date = Order::select('on_the_way_date', 'cancelled_date', 'O_delivery_date', 'delivery_date', 'created_at')->where('id', $request->order_id)->first();
-            $order_date['order_placed_date'] = (!empty($ord_date->delivery_date) ? Carbon::parse($ord_date->delivery_date)->format('d-m-Y') : '');
+            $ord_date = Order::select('on_the_way_date', 'cancelled_date', 'O_delivery_date', 'delivery_date', 'created_at')->where('id', $order_id)->first();
+            $order_date['order_placed_date'] = (!empty($ord_date->delivery_date) ?Carbon::parse($ord_date->delivery_date)->format('d-m-Y') : '');
             // $order_date['on_the_way_date']=(!empty($ord_date->on_the_way_date)?$ord_date->on_the_way_date:'');
-            $order_date['on_the_way_date'] = (!empty($ord_date->on_the_way_date) ? Carbon::parse($ord_date->on_the_way_date)->format('d-m-Y') : '');
-            $order_date['delivery_date'] = (!empty($ord_date->O_delivery_date) ? Carbon::parse($ord_date->O_delivery_date)->format('d-m-Y') : '');
-            $order_date['cancelled_date'] = (!empty($ord_date->cancelled_date) ? Carbon::parse($ord_date->cancelled_date)->format('d-m-Y') : '');
+            $order_date['on_the_way_date'] = (!empty($ord_date->on_the_way_date) ?Carbon::parse($ord_date->on_the_way_date)->format('d-m-Y') : '');
+            $order_date['delivery_date'] = (!empty($ord_date->O_delivery_date) ?Carbon::parse($ord_date->O_delivery_date)->format('d-m-Y') : '');
+            $order_date['cancelled_date'] = (!empty($ord_date->cancelled_date) ?Carbon::parse($ord_date->cancelled_date)->format('d-m-Y') : '');
             // $order_date['order_placed_date']=$order_date->created_at->format('Y-m-d');
 
             $success['statuscode'] = 200;
@@ -1153,17 +1262,18 @@ class OrderController extends Controller
             /**
              * params value (product_id,product_qty)
              **/
-            $params['order_id'] = $request->order_id;
+            $params['order_id'] = $order_id;
             $params['user_id'] = $user->id;
             $success['params'] = $params;
             $success['orders'] = $orders;
             $success['orders_date'] = $order_date;
             $success['product_details'] = $productdetails;
             $success['returnablejar_qty'] = (!empty($orders) ? $orders->returnablejar_qty : '');
-            $success['no_of_jars_available'] = (!empty($orders) ? Orderproducts::where('order_id', $orders->id)->sum('quantity') : '0');
+            $success['no_of_jars_available'] = (!empty($orders) ?Orderproducts::where('order_id', $orders->id)->sum('quantity') : '0');
             $response['response'] = $success;
             return response()->json($response, 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -1183,49 +1293,106 @@ class OrderController extends Controller
 
             $user = Auth::user();
 
-            if (!empty($user)) {
-                if ($user->user_type == "distributor") {
-                    $orderplaced = array();
-                    $orders = Order::select('order_id', 'total', 'created_at', 'status', 'id', 'customer_id', 'delivery_date', 'delivery_time')->orderBy('updated_at', 'desc')->where('assigned_distributor', $user->id)->where('status', $request->status)->limit($request->count)->get();
-                    $orderplaced['data'] = [];
-                    foreach ($orders as $key => $order) {
-                        $customer = User::select('id', 'name')->where('id', $order->customer_id)->first();
-                        $orders[$key]['created_date'] = $order->delivery_date;
-                        $orders[$key]['customer_name'] = $customer->name;
-                        $orders[$key]['km'] = "";
-                        $order_products = Orderproducts::where('order_id', $order->id)->count();
-                        $order->product_quantity = $order_products;
-
-                        $orderplaced['data'] = $orders;
-                    }
-
-                    $success['statuscode'] = 200;
-                    $success['message'] = "Orders lists";
-                    /**
-                     * params value (product_id,product_qty)
-                     **/
-                    $params['count'] = $request->count;
-                    $success['params'] = $params;
-                    $success['orders'] = $orderplaced;
-                    $response['response'] = $success;
-                    return response()->json($response, 200);
-                } else {
-                    $success['statuscode'] = 401;
-                    $success['message'] = "Please login as distributor";
-                    $params = [];
-                    $success['params'] = $params;
-                    $response['response'] = $success;
-                    return response()->json($response, 401);
-                }
-            } else {
-                $success['statuscode'] = 401;
-                $success['message'] = "Please login";
-                $params = [];
-                $success['params'] = $params;
-                $response['response'] = $success;
-                return response()->json($response, 401);
+            if (!$user || $user->user_type != "distributor") {
+                return response()->json([
+                    'response' => [
+                        'statuscode' => 401,
+                        'message' => "Please login as distributor",
+                        'params' => [],
+                    ]
+                ], 401);
             }
-        } catch (Exception $e) {
+
+            $distributor_pincode = Owner_meta_data::where('user_id', $user->id)->value('pincode');
+
+            $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
+                ->leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                ->orderBy('orders.updated_at', 'desc');
+
+            if ($request->filled('status')) {
+                $status = str_replace('"', '', $request->status); // Remove quotes if passed
+                if (strtolower($status) == 'order_placed') {
+                    $status = 'Order placed';
+                    
+                    // For "Order placed", we match on assigned_distributor OR pincode matching
+                    $order_query->where(function ($query) use ($user, $distributor_pincode) {
+                        $query->where('orders.assigned_distributor', $user->id);
+                        if (!empty($distributor_pincode)) {
+                            $query->orWhere('user_addresses.zip_code', $distributor_pincode);
+                        }
+                    });
+                }
+                elseif (strtolower($status) == 'on_the_way') {
+                    $status = 'On the way';
+                    // For "On the way", match ONLY if this distributor accepted it (checked by assigned_deliveryboy)
+                    $order_query->where(function ($query) use ($user) {
+                        $query->where('orders.assigned_deliveryboy', $user->id)
+                              ->orWhere('orders.assigned_distributor', $user->id);
+                    });
+                }
+                elseif (strtolower($status) == 'delivery' || strtolower($status) == 'delivered') {
+                    $status = 'Delivery';
+                    // For "Delivery", match ONLY if this distributor accepted it (checked by assigned_deliveryboy)
+                    $order_query->where(function ($query) use ($user) {
+                        $query->where('orders.assigned_deliveryboy', $user->id)
+                              ->orWhere('orders.assigned_distributor', $user->id);
+                    });
+                }
+                $order_query->where('orders.status', $status);
+            } else {
+                // If NO status block is provided, we will return ALL relevant orders:
+                // (Orders in their pincode that are 'Order placed') OR (Orders they have accepted regardless of pincode)
+                $order_query->where(function ($query) use ($user, $distributor_pincode) {
+                    // Match pincode OR assigned distributor purely
+                    $query->where('orders.assigned_distributor', $user->id);
+                    if (!empty($distributor_pincode)) {
+                        $query->orWhere('user_addresses.zip_code', $distributor_pincode);
+                    }
+                    // OR match if they accepted it
+                    $query->orWhere('orders.assigned_deliveryboy', $user->id);
+                });
+            }
+
+            if ($request->filled('count')) {
+                $count = $request->input('count');
+                $order_query->limit($count);
+            }
+
+            $orders = $order_query->get();
+
+            $url = url('/');
+            foreach ($orders as $key => $order) {
+                $customer = User::select('id', 'name')->where('id', $order->customer_id)->first();
+                $orders[$key]['created_date'] = $order->delivery_date;
+                $orders[$key]['customer_name'] = $customer ? $customer->name : 'N/A';
+                $orders[$key]['km'] = "";
+
+                // Fetch products for each order
+                $order_products = Orderproducts::where('order_id', $order->id)->get();
+                $products_list = [];
+
+                foreach ($order_products as $op_key => $op) {
+                    $product = Product::select('id', 'name', 'image')->where('id', $op->product_id)->first();
+                    $products_list[$op_key]['product_img'] = $url . '/' . (!empty($product) ? $product->image : '');
+                    $products_list[$op_key]['product_name'] = $product ? $product->name : 'Unknown Product';
+                    $products_list[$op_key]['product_qty'] = $op->quantity;
+                    $products_list[$op_key]['amount'] = $op->amount;
+                }
+
+                $orders[$key]['products'] = $products_list;
+                $orders[$key]['product_quantity'] = (int)collect($products_list)->sum('product_qty');
+            }
+
+            return response()->json([
+                'response' => [
+                    'statuscode' => 200,
+                    'message' => "Orders lists",
+                    'params' => ['count' => count($orders)],
+                    'orders' => ['data' => $orders],
+                ]
+            ], 200);
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -1238,9 +1405,94 @@ class OrderController extends Controller
         }
     }
 
+    public function distributor_accepted_orders(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user || $user->user_type != "distributor") {
+                return response()->json([
+                    'response' => [
+                        'statuscode' => 401,
+                        'message' => "Please login as distributor",
+                        'params' => [],
+                    ]
+                ], 401);
+            }
+
+            $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
+                ->where('orders.assigned_deliveryboy', $user->id)
+                ->orderBy('orders.updated_at', 'desc');
+
+            if ($request->filled('status')) {
+                $status = str_replace('"', '', $request->status); // Remove quotes if passed
+                if (strtolower($status) == 'order_placed') {
+                    $status = 'Order placed';
+                }
+                elseif (strtolower($status) == 'on_the_way') {
+                    $status = 'On the way';
+                }
+                elseif (strtolower($status) == 'delivery' || strtolower($status) == 'delivered') {
+                    $status = 'Delivery';
+                }
+                $order_query->where('orders.status', $status);
+            } else {
+                // If no status provided, show both On the way and Delivery
+                $order_query->whereIn('orders.status', ['On the way', 'Delivery']);
+            }
+
+            if ($request->filled('count')) {
+                $count = $request->input('count');
+                $order_query->limit($count);
+            }
+
+            $orders = $order_query->get();
+
+            $url = url('/');
+            foreach ($orders as $key => $order) {
+                $customer = User::select('id', 'name')->where('id', $order->customer_id)->first();
+                $orders[$key]['created_date'] = $order->delivery_date;
+                $orders[$key]['customer_name'] = $customer ? $customer->name : 'N/A';
+                $orders[$key]['km'] = "";
+
+                // Fetch products for each order
+                $order_products = Orderproducts::where('order_id', $order->id)->get();
+                $products_list = [];
+
+                foreach ($order_products as $op_key => $op) {
+                    $product = Product::select('id', 'name', 'image')->where('id', $op->product_id)->first();
+                    $products_list[$op_key]['product_img'] = $url . '/' . (!empty($product) ? $product->image : '');
+                    $products_list[$op_key]['product_name'] = $product ? $product->name : 'Unknown Product';
+                    $products_list[$op_key]['product_qty'] = $op->quantity;
+                    $products_list[$op_key]['amount'] = $op->amount;
+                }
+
+                $orders[$key]['products'] = $products_list;
+                $orders[$key]['product_quantity'] = (int)collect($products_list)->sum('product_qty');
+            }
+
+            return response()->json([
+                'response' => [
+                    'statuscode' => 200,
+                    'message' => "Orders lists",
+                    'params' => ['count' => count($orders)],
+                    'orders' => ['data' => $orders],
+                ]
+            ], 200);
+        }
+        catch (Exception $e) {
+            $success['statuscode'] = 401;
+            $success['message'] = "Something went wrong";
+            $params = [];
+            $success['params'] = $params;
+            $response['response'] = $success;
+            return response()->json($response, 401);
+        }
+    }
 
 
-    public function distributor_orderDetails(Request $request)
+
+    public function distributor_orderDetails(Request $request, $order_id)
     {
         try {
             $user = Auth::user();
@@ -1250,14 +1502,36 @@ class OrderController extends Controller
                 if (!empty($address_table)) {
                     $lat = $address_table->lat;
                     $lang = $address_table->lang;
-                    $orders = Order::join('shipping_address', 'orders.id', '=', 'shipping_address.order_id')->join('user_addresses', 'shipping_address.address_id', '=', 'user_addresses.id')->where('orders.id', $request->order_id)->select('orders.order_id', "user_addresses.lat as customer_lat", "user_addresses.lang as customer_lang", 'orders.sub_total', 'orders.total', 'orders.created_at', 'orders.status', 'orders.total', 'orders.id', 'orders.deposit_amount', 'orders.deliver_charge', 'orders.delivery_date', 'orders.returnablejar_qty', 'orders.delivery_time', 'orders.customer_id', DB::raw("COALESCE(6371 * acos(cos(radians(" . $lat . ")) 
-                        * cos(radians(user_addresses.lat)) 
-                        * cos(radians(user_addresses.lang) 
-                        - radians(" . $lang . ")) 
-                        + sin(radians(" . $lat . ")) 
-                        * sin(radians(user_addresses.lat))),0) AS distance"))
-
+                    $orders = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                        ->where('orders.id', $order_id)
+                        ->select(
+                        'orders.order_id',
+                        "user_addresses.lat as customer_lat",
+                        "user_addresses.lang as customer_lang",
+                        'orders.sub_total',
+                        'orders.total',
+                        'orders.created_at',
+                        'orders.status',
+                        'orders.id',
+                        'orders.deposit_amount',
+                        'orders.deliver_charge',
+                        'orders.delivery_date',
+                        'orders.returnablejar_qty',
+                        'orders.delivery_time',
+                        'orders.customer_id'
+                    )
                         ->first();
+
+                    if (!$orders) {
+                        return response()->json([
+                            'response' => [
+                                'statuscode' => 401,
+                                'message' => "Order not found",
+                                'params' => ['order_id' => $order_id],
+                            ]
+                        ], 401);
+                    }
+
                     $customer = User_address::select('id', 'full_name')->where('user_id', $orders->customer_id)->first();
                     if (!empty($orders)) {
                         $orders['created_date'] = $orders->delivery_date;
@@ -1271,7 +1545,8 @@ class OrderController extends Controller
                         $whatIWant = substr($kms, strpos($kms, " ") + 1);
                         if ($whatIWant == "km") {
                             $kms = str_replace('km', '', $kms);
-                        } else {
+                        }
+                        else {
                             $kms = str_replace('m', '', $kms);
                             $kms = $kms / 1000;
                         }
@@ -1282,17 +1557,17 @@ class OrderController extends Controller
                         // $orders['kms']=round($orders->distance,2);
                         $order_products = Orderproducts::where('order_id', $orders->id)->count();
                         $orders['product_quantity'] = $order_products;
-                        $ship_address = ShippingAddress::where('order_id', $orders->id)->first();
-                        $user_address = User_address::where('id', $ship_address->address_id)->first();
+                        $user_address = User_address::where('id', $orders->selected_address_id)->first();
                         // $orders['address']=(!empty($user_address->address) ?$user_address->address:''). ', '.(!empty($user_address->city)?$user_address->city:''). ', '.(!empty($user_address->state)?$user_address->state:''). ', '.(!empty($user_address->zip_code)?$user_address->zip_code:'');
                         if (!empty($user_address)) {
                             $orders['address'] = $user_address->address . ', ' . $user_address->city . ', ' . $user_address->state . ', ' . $user_address->zip_code;
-                        } else {
+                        }
+                        else {
 
                             $orders['address'] = "";
                         }
-                        
-                        
+
+
                         $orders->no_of_jars_ordered = 0;
                         $ordered_products = Orderproducts::select('product_id')->where('order_id', $orders->id)->get();
 
@@ -1318,7 +1593,7 @@ class OrderController extends Controller
                         $orders['no_of_jars_returned'] = Orderproducts::where('order_id', $orders->id)->sum('no_of_jars_returned');
                     }
 
-                    $orderdetails = OrderProducts::where('order_id', $request->order_id)->get();
+                    $orderdetails = OrderProducts::where('order_id', $order_id)->get();
                     $productdetails = [];
                     $url = url('/');
                     foreach ($orderdetails as $key => $orderdetail) {
@@ -1329,13 +1604,9 @@ class OrderController extends Controller
                         $productdetails[$key]['product_qty'] = $orderdetail->quantity;
                         $productdetails[$key]['returnablejar_qty'] = $orderdetail->returnablejar_qty;
                     }
-                    $S_address = collect([]);
-                    $shipping_address = ShippingAddress::where('order_id', $orders->id)->first();
-                    if (!empty($shipping_address)) {
-                        $ordered_address = User_address::where('id', $ship_address->address_id)->withTrashed()->first();
-                        $S_address = $ordered_address;
-                    } else {
-                        $S_address = [];
+                    $S_address = User_address::where('id', $orders->selected_address_id)->withTrashed()->first();
+                    if (!$S_address) {
+                        $S_address = null;
                     }
 
 
@@ -1344,7 +1615,8 @@ class OrderController extends Controller
 
                     if (!empty($user_address)) {
                         $U_address = $user_address;
-                    } else {
+                    }
+                    else {
                         $U_address = [];
                     }
 
@@ -1366,7 +1638,8 @@ class OrderController extends Controller
                     $success['lat_lang'] = $U_address;
                     $response['response'] = $success;
                     return response()->json($response, 200);
-                } else {
+                }
+                else {
                     $success['statuscode'] = 200;
                     $success['message'] = "Address list empty";
                     $params = [];
@@ -1374,7 +1647,8 @@ class OrderController extends Controller
                     $response['response'] = $success;
                     return response()->json($response, 401);
                 }
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -1382,12 +1656,10 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
-            /**
-             * params value (user_id,otp,token)
-             **/
             $params = [];
             $success['params'] = $params;
             $response['response'] = $success;
@@ -1401,15 +1673,39 @@ class OrderController extends Controller
             $user = Auth::user();
             $report_count = collect([]);
             if (!empty($user)) {
-                $order_placed = Order::select('status')->where('status', 'Order placed')->where('payment_status', 'paid')->get();
-                $on_the_way = Order::select('status')->where('assigned_deliveryboy', $user->id)->where('status', 'On the way')->get();
-                $delivery = Order::select('status')->where('assigned_deliveryboy', $user->id)->where('status', 'Delivery')->get();
-                $cancelled = Order::select('status')->where('assigned_deliveryboy', $user->id)->where('status', 'Cancelled')->get();
+                $distributor_pincode = Owner_meta_data::where('user_id', $user->id)->value('pincode');
+                
+                $order_placed = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.status', 'Order placed')
+                    ->where(function ($query) use ($user, $distributor_pincode) {
+                        $query->where('orders.assigned_distributor', $user->id);
+                        if (!empty($distributor_pincode)) {
+                            $query->orWhere('user_addresses.zip_code', $distributor_pincode);
+                        }
+                    })
+                    ->count();
 
-                $report_count->put("order_placed", count($order_placed));
-                $report_count->put("on_the_way", count($on_the_way));
-                $report_count->put("delivery", count($delivery));
-                $report_count->put("cancelled", count($cancelled));
+                $on_the_way = Order::where(function ($query) use ($user) {
+                        $query->where('assigned_deliveryboy', $user->id)
+                              ->orWhere('assigned_distributor', $user->id);
+                    })->where('status', 'On the way')->count();
+
+                // To match "Delivered today", we could check delivery_date or updated_at, but we'll stick to 'Delivery' state entirely for now
+                // Alternatively, add a check for whereDate('orders.updated_at', Carbon::today()) if it absolutely needs to be today.
+                $delivery = Order::where(function ($query) use ($user) {
+                        $query->where('assigned_deliveryboy', $user->id)
+                              ->orWhere('assigned_distributor', $user->id);
+                    })->where('status', 'Delivery')->count();
+
+                $cancelled = Order::where(function ($query) use ($user) {
+                        $query->where('assigned_deliveryboy', $user->id)
+                              ->orWhere('assigned_distributor', $user->id);
+                    })->where('status', 'Cancelled')->count();
+
+                $report_count->put("order_placed", $order_placed);
+                $report_count->put("on_the_way", $on_the_way);
+                $report_count->put("delivery", $delivery);
+                $report_count->put("cancelled", $cancelled);
 
                 $success['statuscode'] = 200;
                 $success['message'] = "Report details";
@@ -1422,7 +1718,8 @@ class OrderController extends Controller
                 $success['orders'] = $report_count;
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -1430,7 +1727,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -1456,9 +1754,9 @@ class OrderController extends Controller
             $user = Auth::user();
             if (!empty($user)) {
                 $user_table = User::find($user->id);
-                
-                
-                if(empty($user_table)) {
+
+
+                if (empty($user_table)) {
                     $success['statuscode'] = 401;
                     $success['message'] = "User not found";
 
@@ -1466,11 +1764,11 @@ class OrderController extends Controller
                     $response['response'] = $success;
                     return response()->json($response, 401);
                 }
-                
+
                 $owner_meta_data = Owner_meta_data::where('user_id', $user_table->id)->first();
-                
-                
-                if(empty($owner_meta_data)) {
+
+
+                if (empty($owner_meta_data)) {
                     $success['statuscode'] = 401;
                     $success['message'] = "User not found";
 
@@ -1478,9 +1776,9 @@ class OrderController extends Controller
                     $response['response'] = $success;
                     return response()->json($response, 401);
                 }
-                
-                
-                if($owner_meta_data->status == 0) {
+
+
+                if ($owner_meta_data->status == 0) {
                     $success['statuscode'] = 401;
                     $success['message'] = "We're on it! Your account will be ready shortly.";
 
@@ -1525,7 +1823,8 @@ class OrderController extends Controller
                         if ($request->status != "Order placed") {
                             $orderss->orderBy('orders.updated_at', 'desc');
                             $orderss->where('orders.assigned_deliveryboy', $user->id);
-                        } else {
+                        }
+                        else {
                             $orderss->orderBy('orders.id', 'desc');
                         }
                         $orders = $orderss->get();
@@ -1550,7 +1849,8 @@ class OrderController extends Controller
                             if ($whatIWant == "km") {
 
                                 $kms = str_replace('km', '', $kms);
-                            } else {
+                            }
+                            else {
 
                                 $kms = str_replace('m', '', $kms);
                                 $kms = $kms / 1000;
@@ -1587,7 +1887,8 @@ class OrderController extends Controller
                                 $order->no_of_jars_returned = Orderproducts::where('order_id', $order->order_id)->sum('no_of_jars_returned');
 
                                 array_push($ord, $order);
-                            } else {
+                            }
+                            else {
 
                                 unset($orders[$key]);
                             }
@@ -1599,7 +1900,8 @@ class OrderController extends Controller
                         $success['params'] = $params;
                         $response['response'] = $success;
                         return response()->json($response, 200);
-                    } else {
+                    }
+                    else {
                         $success['statuscode'] = 401;
                         $success['message'] = "Address list empty";
                         $params = [];
@@ -1607,7 +1909,8 @@ class OrderController extends Controller
                         $response['response'] = $success;
                         return response()->json($response, 401);
                     }
-                } else if ($user_table->user_type == "distributor") {
+                }
+                else if ($user_table->user_type == "distributor") {
 
                     $user_status = $user->user_status;
                     $address_table = User_address::select('lat', 'lang')->where('user_id', $user_table->id)->first();
@@ -1656,7 +1959,8 @@ class OrderController extends Controller
                             $whatIWant = substr($kms, strpos($kms, " ") + 1);
                             if ($whatIWant == "km") {
                                 $kms = str_replace('km', '', $kms);
-                            } else {
+                            }
+                            else {
                                 $kms = str_replace('m', '', $kms);
                                 $kms = $kms / 1000;
                             }
@@ -1672,7 +1976,8 @@ class OrderController extends Controller
                                 $order->no_of_jars_available = Orderproducts::where('order_id', $order->id)->sum('quantity');
                                 $order->no_of_jars_returned = Orderproducts::where('order_id', $order->id)->sum('no_of_jars_returned');
                                 array_push($ord, $order);
-                            } else {
+                            }
+                            else {
 
                                 unset($orders[$key]);
                             }
@@ -1682,7 +1987,8 @@ class OrderController extends Controller
                         $success['params'] = $params;
                         $response['response'] = $success;
                         return response()->json($response, 200);
-                    } else {
+                    }
+                    else {
                         $success['statuscode'] = 401;
                         $success['message'] = "Address list empty";
                         $params = [];
@@ -1690,7 +1996,8 @@ class OrderController extends Controller
                         $response['response'] = $success;
                         return response()->json($response, 401);
                     }
-                } else {
+                }
+                else {
                     $success['statuscode'] = 401;
                     $success['message'] = "Invalid Login user type";
                     $params = [];
@@ -1698,7 +2005,8 @@ class OrderController extends Controller
                     $response['response'] = $success;
                     return response()->json($response, 401);
                 }
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -1706,7 +2014,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -1753,7 +2062,7 @@ class OrderController extends Controller
                                     return response()->json($response, 400);
                                 }
                             }
-                                
+
                             if (empty($check_status->assigned_deliveryboy) || $check_status->assigned_deliveryboy == $user->id) {
                                 $on_the_waydate = $check_status->on_the_way_date;
                                 $cancelled_date = $check_status->cancelled_date;
@@ -1767,7 +2076,8 @@ class OrderController extends Controller
                                 if ($request->status == "On the way") {
                                     $on_the_waydate = date("Y-m-d");
                                     $cancelled_date = $check_status->cancelled_date;
-                                } else if ($request->status == "Cancelled") {
+                                }
+                                else if ($request->status == "Cancelled") {
                                     $on_the_waydate = $check_status->on_the_way_date;
                                     $cancelled_date = date("Y-m-d");
                                 }
@@ -1866,13 +2176,15 @@ class OrderController extends Controller
                                 $response['response'] = $success;
                                 return response()->json($response, 200);
                             }
-                        } else if ($user->user_type == "distributor") {
+                        }
+                        else if ($user->user_type == "distributor") {
 
                             if (empty($check_status->assigned_distributor) || $check_status->assigned_distributor == $user->id) {
                                 if ($request->status == "Delivery") {
                                     $delivered_date = date("Y-m-d");
                                     $delivered_time = date("h:i:sa");
-                                } else {
+                                }
+                                else {
                                     $delivered_date = $check_status->O_delivery_date;
                                     $delivered_time = $check_status->O_delivery_time;
                                 }
@@ -1880,12 +2192,14 @@ class OrderController extends Controller
                                 if ($request->status == "On the way") {
                                     $on_the_waydate = date("Y-m-d");
                                     $cancelled_date = $check_status->cancelled_date;
-                                } else if ($request->status == "Cancelled") {
+                                }
+                                else if ($request->status == "Cancelled") {
                                     $on_the_waydate = $check_status->on_the_way_date;
                                     $cancelled_date = date("Y-m-d");
-                                } else {
-                                    $on_the_waydate = "";
-                                    $cancelled_date = "";
+                                }
+                                else {
+                                    $on_the_waydate = $check_status->on_the_way_date;
+                                    $cancelled_date = $check_status->cancelled_date;
                                 }
                                 Order::where('id', $request->order_id)->update(['status' => $request->status, 'assigned_deliveryboy' => $user->id, 'O_delivery_date' => $delivered_date, 'O_delivery_time' => $delivered_time, 'on_the_way_date' => $on_the_waydate, 'cancelled_date' => $cancelled_date]);
                                 Mobile_notifications::where('user_id', $check_status->customer_id)->where('order_id', $request->order_id)->where('type', 'orders')->delete();
@@ -1951,7 +2265,8 @@ class OrderController extends Controller
                                 $response['response'] = $success;
                                 return response()->json($response, 200);
                             }
-                        } else {
+                        }
+                        else {
                             $success['statuscode'] = 401;
                             $success['message'] = "Delivery boy already assigned";
                             $params = [];
@@ -1959,7 +2274,8 @@ class OrderController extends Controller
                             $response['response'] = $success;
                             return response()->json($response, 401);
                         }
-                    } else {
+                    }
+                    else {
                         $success['statuscode'] = 200;
                         $success['message'] = "No orders found";
                         $params = [];
@@ -1967,7 +2283,8 @@ class OrderController extends Controller
                         $response['response'] = $success;
                         return response()->json($response, 401);
                     }
-                } else {
+                }
+                else {
                     $success['statuscode'] = 401;
                     $success['message'] = "Login";
                     $params = [];
@@ -1975,7 +2292,8 @@ class OrderController extends Controller
                     $response['response'] = $success;
                     return response()->json($response, 401);
                 }
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -1983,7 +2301,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2021,7 +2340,8 @@ class OrderController extends Controller
                 $success['params'] = $data;
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -2029,7 +2349,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2056,7 +2377,7 @@ class OrderController extends Controller
                 }
 
                 $data = $request->all();
-                
+
                 if (isset($data['is_default']) && $data['is_default'] == "true") {
                     User_address::where('user_id', $user->id)->where('id', '!=', $id)->update(['is_default' => "false"]);
                 }
@@ -2076,13 +2397,15 @@ class OrderController extends Controller
                 $success['address'] = User_address::find($id);
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 500;
             $success['message'] = "Something went wrong: " . $e->getMessage();
             $response['response'] = $success;
@@ -2105,7 +2428,8 @@ class OrderController extends Controller
 
                     if (!empty($pincode)) {
                         $selected_address->isServiceAvailable = true;
-                    } else {
+                    }
+                    else {
                         $selected_address->isServiceAvailable = false;
                     }
 
@@ -2114,15 +2438,17 @@ class OrderController extends Controller
                         $pincde = Pincode::where('pincode', $a->zip_code)->first();
                         if (!empty($pincde)) {
                             $a->isServiceAvailable = true;
-                        } else {
+                        }
+                        else {
                             $a->isServiceAvailable = false;
                         }
                     }
 
 
                     if (empty($selected_address)) {
-                        $selected_address = (object) [];
-                    } else {
+                        $selected_address = (object)[];
+                    }
+                    else {
                         $selected_address->is_default == "true" ? $selected_address->is_default = true : $selected_address->is_default = false;
                     }
                     $success['statuscode'] = 200;
@@ -2131,16 +2457,18 @@ class OrderController extends Controller
                     $params = [];
                     $response['response'] = $success;
                     return response()->json($response, 200);
-                } else {
+                }
+                else {
                     $success['address'] = [];
                     $success['statuscode'] = 200;
                     $success['message'] = "Address lists empty";
-                    $success['selected_address'] = (object) [];
+                    $success['selected_address'] = (object)[];
                     $params = [];
                     $response['response'] = $success;
                     return response()->json($response, 200);
                 }
-            } else {
+            }
+            else {
 
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
@@ -2149,7 +2477,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2175,10 +2504,10 @@ class OrderController extends Controller
             }
 
             $address_id = $request->address_id;
-            
+
             // 1. Fetch the target address to make it default
             $target_address = User_address::where('id', $address_id)->where('user_id', $user->id)->first();
-            
+
             if (empty($target_address)) {
                 $success['statuscode'] = 404;
                 $success['message'] = "Address not found";
@@ -2192,12 +2521,15 @@ class OrderController extends Controller
 
             // 3. Set this specific address to true
             $target_address->is_default = "true";
-            
+
             // If other fields are provided in request, update them too, else keep old values
-            if($request->has('name')) $target_address->full_name = $request->name;
-            if($request->has('door_no')) $target_address->door_no = $request->door_no;
-            if($request->has('phone_number')) $target_address->phone_number = $request->phone_number;
-            
+            if ($request->has('name'))
+                $target_address->full_name = $request->name;
+            if ($request->has('door_no'))
+                $target_address->door_no = $request->door_no;
+            if ($request->has('phone_number'))
+                $target_address->phone_number = $request->phone_number;
+
             $target_address->save();
 
             // 4. Update cart delivery charges based on new default address floor
@@ -2225,7 +2557,8 @@ class OrderController extends Controller
             $response['response'] = $success;
             return response()->json($response, 200);
 
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 500;
             $success['message'] = "Something went wrong: " . $e->getMessage();
             $success['params'] = [];
@@ -2240,7 +2573,7 @@ class OrderController extends Controller
             $user = Auth::user();
             if (!empty($user)) {
                 $check_address = User_address::where('id', $id)->where('user_id', $user->id)->first();
-                
+
                 if (empty($check_address)) {
                     $success['statuscode'] = 404;
                     $success['message'] = "Address not found for ID: " . $id;
@@ -2264,7 +2597,8 @@ class OrderController extends Controller
                 $success['params'] = $params;
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
+            }
+            else {
                 $success['statuscode'] = 401;
                 $success['message'] = "Please login";
                 $params = [];
@@ -2272,7 +2606,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2305,16 +2640,21 @@ class OrderController extends Controller
                             $msg_replace = str_replace(" ", "_", $notification->message);
                             if (strtolower($msg_replace) == "order_placed") {
                                 $msg = "Your " . $order->order_id . " order has been placed";
-                            } else if (strtolower($msg_replace) == "on_the_way") {
+                            }
+                            else if (strtolower($msg_replace) == "on_the_way") {
                                 $msg = "Your " . $order->order_id . " order has been accepted,your item is on the way";
-                            } else if (strtolower($msg_replace) == "delivery") {
+                            }
+                            else if (strtolower($msg_replace) == "delivery") {
                                 $msg = "Your " . $order->order_id . " order has been delivered";
-                            } else if (strtolower($msg_replace) == "cancelled") {
+                            }
+                            else if (strtolower($msg_replace) == "cancelled") {
                                 $msg = "Your " . $order->order_id . " order has been cancelled";
-                            } else if (strtolower($msg_replace) == "reschedule") {
+                            }
+                            else if (strtolower($msg_replace) == "reschedule") {
                                 $msg = "Your " . $order->order_id . " order has been reschedule";
                             }
-                        } else {
+                        }
+                        else {
                             $msg = "";
                         }
 
@@ -2327,11 +2667,12 @@ class OrderController extends Controller
                             $ord['order_id'] = (!empty($order) ? $order->order_id : '');
                             if (!(empty($order)) && $order->status == "Delivery") {
                                 $order->o_status = "Delivered";
-                            } else {
+                            }
+                            else {
                                 if (!(empty($order))) {
                                     $order->o_status = (!empty($order) ? $order->status : '');
                                 }
-                                // $order->o_status=(!empty($order)?$order->status:'');
+                            // $order->o_status=(!empty($order)?$order->status:'');
                             }
                             $ord['title'] = (!empty($order) ? $order->o_status : '');
                             $ord['msg'] = $msg;
@@ -2352,7 +2693,8 @@ class OrderController extends Controller
                                 if (!empty($delivery_address)) {
                                     $lat = $delivery_address->lat;
                                     $lang = $delivery_address->lang;
-                                } else {
+                                }
+                                else {
                                     $lat = "";
                                     $lang = "";
                                 }
@@ -2375,7 +2717,8 @@ class OrderController extends Controller
                                         + sin(radians(" . $lat . ")) 
                                         * sin(radians(user_addresses.lat))),0) AS distance")
                                     )->where('orders.user_type', 'customer')->where('orders.status', 'Order placed')->where('orders.id', $notification->order_id)->orderBy('orders.id', 'desc')->first();
-                                } else {
+                                }
+                                else {
                                     $order = [];
                                 }
 
@@ -2386,7 +2729,8 @@ class OrderController extends Controller
                                     $whatIWant = substr($kms, strpos($kms, " ") + 1);
                                     if ($whatIWant == "km") {
                                         $kms = str_replace('km', '', $kms);
-                                    } else {
+                                    }
+                                    else {
                                         $kms = str_replace('m', '', $kms);
                                         $kms = $kms / 1000;
                                     }
@@ -2397,7 +2741,8 @@ class OrderController extends Controller
                                         $ord['ord_id'] = $order->o_id;
                                         if ($order->order_status == "Delivery") {
                                             $order->o_status = "Delivered";
-                                        } else {
+                                        }
+                                        else {
 
                                             $order->o_status = $order->order_status;
                                         }
@@ -2406,7 +2751,8 @@ class OrderController extends Controller
 
                                         if ($notification->message == "reschedule") {
                                             $ord['msg'] = "Order placed from " . $order->full_name . " has been rescheduled";
-                                        } else {
+                                        }
+                                        else {
                                             $ord['msg'] = "Order placed from " . $order->full_name;
                                         }
                                         $ord['date'] = $order->created_at->format('Y-m-d');
@@ -2438,7 +2784,8 @@ class OrderController extends Controller
                                     $ord['order_id'] = $order->ord_id;
                                     if ($order->order_status == "Delivery") {
                                         $order->o_status = "Delivered";
-                                    } else {
+                                    }
+                                    else {
                                         $order->o_status = $order->order_status;
                                     }
                                     $ord['title'] = $order->o_status;
@@ -2461,7 +2808,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 200);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2493,7 +2841,8 @@ class OrderController extends Controller
                 $success['params'] = $params;
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
+            }
+            else {
                 $notification = Mobile_notifications::all();
                 foreach ($notification as $n) {
                     Mobile_notifications::where('id', '=', $n->id)->update(["removed_user" => $n->removed_user . "," . $user->id]);
@@ -2507,7 +2856,8 @@ class OrderController extends Controller
                 $response['response'] = $success;
                 return response()->json($response, 200);
             }
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -2544,7 +2894,8 @@ class OrderController extends Controller
                     'message' => "All the notification have been read",
                 ],
             ], 200);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json([
                 'response' => [
                     'statuscode' => 500,
@@ -2578,7 +2929,8 @@ class OrderController extends Controller
                     'count' => $notification_count,
                 ],
             ], 200);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json([
                 'response' => [
                     'statuscode' => 500,
@@ -2636,7 +2988,8 @@ class OrderController extends Controller
 
                 if ($is_toresheduleCnt == 0) {
                     $to_reschedule = false;
-                } else {
+                }
+                else {
                     $to_reschedule = true;
                 }
 
@@ -2648,26 +3001,22 @@ class OrderController extends Controller
                 $response['params'] = $params;
                 $response['response'] = $success;
                 return response()->json($response, 200);
-            } else {
-                $success['statuscode'] = 401;
-                $success['message'] = "Something went wrong";
-                /**
-                 * params value (user_id,otp,token)
-                 **/
+            }
+            else {
+                $success["statuscode"] = 401;
+                $success["message"] = "Please login";
                 $params = [];
-                $success['params'] = $params;
-                $response['response'] = $success;
+                $success["params"] = $params;
+                $response["response"] = $success;
                 return response()->json($response, 401);
             }
-        } catch (Exception $e) {
-            $success['statuscode'] = 401;
-            $success['message'] = "Something went wrong";
-            /**
-             * params value (user_id,otp,token)
-             **/
+        }
+        catch (Exception $e) {
+            $success["statuscode"] = 401;
+            $success["message"] = "Something went wrong";
             $params = [];
-            $success['params'] = $params;
-            $response['response'] = $success;
+            $success["params"] = $params;
+            $response["response"] = $success;
             return response()->json($response, 401);
         }
     }

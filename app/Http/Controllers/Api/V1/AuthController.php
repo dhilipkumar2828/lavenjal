@@ -790,9 +790,8 @@ class AuthController extends Controller
                     if($user->user_type=="retailer"){
                       $user_details['shop_name']=(isset($owners_meta_data)?$owners_meta_data->name_of_shop:""); 
                       $user_details['shop_address']=(isset($owners_meta_data)?$owners_meta_data->full_address:"");
-                      $certificate=explode("/", $user->business_certificate, 2);
                     
-                      $user_details['business_certificate']=(!empty($certificate)?$certificate[1]:""); 
+                      $user_details['business_certificate']=(!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : ""); 
                 
                       $user_details['gst_certificate']=""; 
                       $user_details['shop_photo']=""; 
@@ -806,27 +805,10 @@ class AuthController extends Controller
                         $user_details['address']=(isset($address)?$address->address:"");
                         // $user_details['delivery_facility']=(!empty($owners_meta_data)?$owners_meta_data->delivery_facility:"");
                         $user_details['no_of_delivery_person']=(isset($owners_meta_data)?$owners_meta_data->no_of_delivery_boys:"");
-                        $certificate=(!empty($user)?explode("/", $user->business_certificate, 2):"");
-                  
-                        if($certificate!=""){
-                        $user_details['business_certificate']=((count($certificate) >1)?$certificate[1]:""); 
-                        }else{
-                            $user_details['business_certificate']="";  
-                        }
                         
-                      $gst_certificate=(!empty($owners_meta_data)?explode("/", $owners_meta_data->gst_certificate, 2):"");
-                      if($gst_certificate!=""){
-                      $user_details['gst_certificate']=((count($gst_certificate)>1)?$gst_certificate[1]:""); 
-                      }else{
-                          $user_details['gst_certificate']="";  
-                      }
-                      $shop_photo=(!empty($owners_meta_data)?explode("/", $owners_meta_data->shop_photo, 2):"");
-                  
-                      if($shop_photo!=""){
-                      $user_details['shop_photo']=((count($shop_photo)>1)?$shop_photo[1]:""); 
-                      }else{
-                          $user_details['shop_photo']="";  
-                      }
+                        $user_details['business_certificate']=(!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : ""); 
+                        $user_details['gst_certificate']=(!empty($owners_meta_data->gst_certificate) ? url('/') . '/' . $owners_meta_data->gst_certificate : ""); 
+                        $user_details['shop_photo']=(!empty($owners_meta_data->shop_photo) ? url('/') . '/' . $owners_meta_data->shop_photo : ""); 
                     }
                     if(!empty($owners_meta_data)){
                         $user_details['address']=$owners_meta_data->full_address;
