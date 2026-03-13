@@ -289,24 +289,23 @@ public function most_like(){
 public function feedback(Request $request){
     
      try{
-       //  $user_id=$request->user_id;
        $user=Auth::user();
        if($user->user_type=="delivery_agent"){
           $user->user_type="delivery";
        }
         $feedback=new Feedback();
         $feedback->user_id=$user->id;
-        $feedback->rating=$request->rating;
-        $feedback->most_like=implode(',',$request->most_like);
+        $feedback->rating=$request->rating ?? null;
+        $feedback->most_like=!empty($request->most_like) ? implode(',', $request->most_like) : null;
         $feedback->explore_next=$request->explore_next;
         $feedback->type=$user->user_type;
         $feedback->save();
-          $params['rating']=$request->rating;
-          $params['most_like']=$request->most_like;
+          $params['rating']=$request->rating ?? null;
+          $params['most_like']=$request->most_like ?? [];
           $params['explore_next']=$request->explore_next;
         $success['statuscode'] =200;
         $success['params']=$params;
-        $success['message']="Feedback List";
+        $success['message']="Feedback submitted successfully";
         $success['feedback']=$feedback;        
         $response['response']=$success;
         return response()->json($response, 200);
@@ -314,9 +313,6 @@ public function feedback(Request $request){
         catch(Exception $e){
         $success['statuscode'] =401;
         $success['message']="Something went wrong";
-        /**
-         * params value (user_id,otp,token)
-        **/
           $params=[];
           $success['params']=$params;
           $response['response']=$success;
