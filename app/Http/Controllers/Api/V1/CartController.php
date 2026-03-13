@@ -32,19 +32,20 @@ class CartController extends Controller
                 $charges = [];
             }
 
-            // checking is wit first order
-            $is_ordered = 0;
-            $order_count = Order::where('customer_id', $user->id)->get();
-            foreach ($order_count as $ord) {
-                $order_products = Orderproducts::where('order_id', $ord->id)->get();
-                foreach ($order_products as $ord_products) {
-                    $products = Product::where('id', $ord_products->product_id)->where('type','jar')->first();
-
-                    if (!empty($products)) {
-                        $is_ordered += 1;
-                    }
+            // checking is with first order - calculating total jars ever ordered in any single previous order
+            $max_jars_ordered = 0;
+            $orders = Order::where('customer_id', $user->id)->get();
+            foreach ($orders as $ord) {
+                $current_order_jars = Orderproducts::join('products', 'order_products.product_id', '=', 'products.id')
+                    ->where('order_products.order_id', $ord->id)
+                    ->where('products.type', 'jar')
+                    ->sum('order_products.quantity');
+                
+                if ($current_order_jars > $max_jars_ordered) {
+                    $max_jars_ordered = $current_order_jars;
                 }
             }
+            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
             
             
             $current_product = Product::where('id', $request->product_id)->where('type','jar')->exists();
@@ -59,6 +60,10 @@ class CartController extends Controller
                     $success['params'] = $params;
                     $response['response'] = $success;
                     return response()->json($response, 400);
+                }
+                // Use max_jars_ordered for future checks too if needed
+                if ($max_jars_ordered > 0 && $request->product_qty > 100) { // Example limit for returned customers
+                     // ... existing or new logic ...
                 }
                 // 2nd order onwards - No limit (removed the else if for qty > 2)
             } else {
@@ -78,25 +83,38 @@ class CartController extends Controller
                 }
 
 
-                if ($is_ordered == 0 && $product->type == "jar") {
+                if ($product->type == "jar") {
+                    // Get other jar products already in cart
+                    $other_jars_qty = Carts::join('products', 'carts.product_id', '=', 'products.id')
+                        ->where('carts.customer_id', $user->id)
+                        ->where('products.type', 'jar')
+                        ->where('carts.product_id', '!=', $request->product_id)
+                        ->sum('carts.product_qty');
+                    
+                    $total_jars_in_cart = $request->product_qty + $other_jars_qty;
+                    
+                    if ($max_jars_ordered == 0) {
+                        // First time customer: deposit for all jars (up to 3)
+                        $total_deposit_needed = $total_jars_in_cart * $product->deposit_amount;
+                    } else {
+                        // Subsequent orders: deposit only for extra jars beyond max previously ordered
+                        $total_deposit_needed = max(0, $total_jars_in_cart - $max_jars_ordered) * $product->deposit_amount;
+                    }
 
-                    $returnable_jarqty = 0;
-                    $no_of_jars_returned = 0;
-                    $depositamount = $request->product_qty * $product->deposit_amount;
-                } else if (($product->type != "jar" && $is_ordered == 0)) {
-
-                    $depositamount = 0;
+                    // Subtract deposit already accounted for in other cart items
+                    $other_cart_deposit = Carts::join('products', 'carts.product_id', '=', 'products.id')
+                        ->where('carts.customer_id', $user->id)
+                        ->where('products.type', 'jar')
+                        ->where('carts.product_id', '!=', $request->product_id)
+                        ->sum('carts.deposit_amount');
+                    
+                    $depositamount = max(0, $total_deposit_needed - $other_cart_deposit);
                     $no_of_jars_returned = 0;
                     $returnable_jarqty = 0;
                 } else {
-                    $return_qty = Carts::where('customer_id', $user->id)->sum('no_of_jars_returned');
-                    if ($request->product_qty >= $return_qty) {
-                        $depositamount = ($request->product_qty - $return_qty) * $product->deposit_amount;
-                    } else if ($return_qty >= $request->product_qty) {
-                        $depositamount = 0;
-                    }
-                    $no_of_jars_returned = $return_qty;
-
+                    $depositamount = 0;
+                    $no_of_jars_returned = 0;
+                    $returnable_jarqty = 0;
                 }
 
 
@@ -251,17 +269,19 @@ class CartController extends Controller
             $no_of_jars_returned = 0;
             $jar_quantity = 0;
 
-            $is_ordered = 0;
-            $order_count = Order::where('customer_id', $user->id)->get();
-            foreach ($order_count as $ord) {
-                $ord_products = Orderproducts::where('order_id', $ord->id)->first();
-                if (!empty($ord_products)) {
-                    $products = Product::where('id', $ord_products->product_id)->first();
-                    if (!empty($products)) {
-                        $is_ordered += 1;
-                    }
+            $max_jars_ordered = 0;
+            $orders = Order::where('customer_id', $user->id)->get();
+            foreach ($orders as $ord) {
+                $current_order_jars = Orderproducts::join('products', 'order_products.product_id', '=', 'products.id')
+                    ->where('order_products.order_id', $ord->id)
+                    ->where('products.type', 'jar')
+                    ->sum('order_products.quantity');
+                
+                if ($current_order_jars > $max_jars_ordered) {
+                    $max_jars_ordered = $current_order_jars;
                 }
             }
+            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
 
             foreach ($carts as $key => $cart) {
                 $carts[$key]['order_count'] = $order_count;
