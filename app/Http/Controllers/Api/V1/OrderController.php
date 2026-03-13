@@ -67,26 +67,22 @@ class OrderController extends Controller
     }
 
 
-    private function map($delivery_lat, $delivery_lang, $distributor_lat, $distributor_lang)
+    private function map($lat1, $lon1, $lat2, $lon2)
     {
-        $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins=" . $delivery_lat . "," . $delivery_lang . "&destinations=" . $distributor_lat . "," . $distributor_lang . "&mode=driving&language=pl-PL&key=AIzaSyAMWBCScrGIa5WPe9VB39Kiz_ER7M363uM";
-        //   $dist='';
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_PROXYPORT, 3128);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-        $response = curl_exec($ch);
-        $response_a = json_decode($response, true);
-        if (isset($response_a['rows'][0]['elements'][0]['distance']['text'])) {
-            $m = $response_a['rows'][0]['elements'][0]['distance']['text'];
-        }
-        else {
-            $m = 0;
+        if (empty($lat1) || empty($lon1) || empty($lat2) || empty($lon2)) {
+            return "0 km";
         }
 
-        return $m;
+        $earth_radius = 6371; // km
+        $d_lat = deg2rad($lat2 - $lat1);
+        $d_lng = deg2rad($lon2 - $lon1);
+        $a = sin($d_lat / 2) * sin($d_lat / 2)
+           + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+           * sin($d_lng / 2) * sin($d_lng / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        $kms = round($earth_radius * $c, 2);
+
+        return $kms . " km";
     }
 
 
@@ -1018,6 +1014,7 @@ class OrderController extends Controller
                 }
 
                 $itemscnt = 0;
+                $sum_jar_ordered = 0;
                 $product_list = [];
                 $ord_products = Orderproducts::where('order_id', $order->id)->get();
 
@@ -1025,13 +1022,18 @@ class OrderController extends Controller
                     $itemscnt += $o->quantity;
                     $p = Product::find($o->product_id);
                     if ($p) {
+                        if ($p->type == 'jar') {
+                            $sum_jar_ordered += $o->quantity;
+                        }
                         $product_list[] = [
                             'name' => $p->name,
                             'image' => $url . '/' . $p->image,
                             'qty' => $o->quantity,
                             'size' => $p->size,
                             'amount' => $o->amount,
-                            'total_amount' => $o->total_amount
+                            'total_amount' => $o->total_amount,
+                            'product_qty' => $o->quantity,
+                            'returnablejar_qty' => $o->no_of_jars_returned
                         ];
                     }
                 }
@@ -1039,6 +1041,7 @@ class OrderController extends Controller
                 $sum_jar = Orderproducts::where('order_id', $order->id)->sum('no_of_jars_returned');
 
                 $orders[$key]['items_count'] = $itemscnt;
+                $orders[$key]['no_of_jar_order'] = $sum_jar_ordered;
                 $orders[$key]['no_of_returnable_jar'] = $sum_jar;
                 $orders[$key]['products'] = $product_list;
 
@@ -1080,6 +1083,7 @@ class OrderController extends Controller
                 }
 
                 $itemscnt = 0;
+                $sum_jar_ordered = 0;
                 $product_list = [];
                 $ord_products = Orderproducts::where('order_id', $order->id)->get();
 
@@ -1087,13 +1091,18 @@ class OrderController extends Controller
                     $itemscnt += $o->quantity;
                     $p = Product::find($o->product_id);
                     if ($p) {
+                        if ($p->type == 'jar') {
+                            $sum_jar_ordered += $o->quantity;
+                        }
                         $product_list[] = [
                             'name' => $p->name,
                             'image' => $url . '/' . $p->image,
                             'qty' => $o->quantity,
                             'size' => $p->size,
                             'amount' => $o->amount,
-                            'total_amount' => $o->total_amount
+                            'total_amount' => $o->total_amount,
+                            'product_qty' => $o->quantity,
+                            'returnablejar_qty' => $o->no_of_jars_returned
                         ];
                     }
                 }
@@ -1101,6 +1110,7 @@ class OrderController extends Controller
                 $sum_jar = Orderproducts::where('order_id', $order->id)->sum('no_of_jars_returned');
 
                 $track_orders[$key]['items_count'] = $itemscnt;
+                $track_orders[$key]['no_of_jar_order'] = $sum_jar_ordered;
                 $track_orders[$key]['no_of_returnable_jar'] = $sum_jar;
                 $track_orders[$key]['products'] = $product_list;
 
@@ -1198,13 +1208,19 @@ class OrderController extends Controller
                 }
 
                 $itemscnt = 0;
+                $sum_jar_ordered = 0;
                 $ord = Orderproducts::where('order_id', $order_id)->get();
                 foreach ($ord as $o) {
                     $itemscnt += $o->quantity;
+                    $p = Product::find($o->product_id);
+                    if ($p && $p->type == 'jar') {
+                        $sum_jar_ordered += $o->quantity;
+                    }
                 }
 
                 $sum_jar = Orderproducts::where('order_id', $orders->id)->sum('no_of_jars_returned');
                 $orders->items_count = $itemscnt;
+                $orders->no_of_jar_order = $sum_jar_ordered;
                 $orders->no_of_returnable_jar = $sum_jar;
 
                 $user_address = User_address::where('id', $orders->selected_address_id)->first();
@@ -1245,7 +1261,7 @@ class OrderController extends Controller
                 $productdetails[$key]['amount'] = $orderdetail->amount;
                 $productdetails[$key]['product_qty'] = $orderdetail->quantity;
                 $productdetails[$key]['total_amount'] = $orderdetail->total_amount;
-                $productdetails[$key]['returnablejar_qty'] = $orderdetail->returnablejar_qty;
+                $productdetails[$key]['returnablejar_qty'] = $orderdetail->no_of_jars_returned;
             }
 
             $ord_date = Order::select('on_the_way_date', 'cancelled_date', 'O_delivery_date', 'delivery_date', 'created_at')->where('id', $order_id)->first();
@@ -1498,13 +1514,11 @@ class OrderController extends Controller
             $user = Auth::user();
 
             if ($user->user_type == "distributor" || $user->user_type == "delivery_agent") {
-                $address_table = User_address::select('lat', 'lang')->where('user_id', $user->id)->first();
-                if (!empty($address_table)) {
-                    $lat = $address_table->lat;
-                    $lang = $address_table->lang;
-                    $orders = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
-                        ->where('orders.id', $order_id)
-                        ->select(
+
+                // ── Step 1: Fetch order with customer delivery address lat/lang and assigned distributor ──
+                $orders = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.id', $order_id)
+                    ->select(
                         'orders.order_id',
                         "user_addresses.lat as customer_lat",
                         "user_addresses.lang as customer_lang",
@@ -1518,151 +1532,144 @@ class OrderController extends Controller
                         'orders.delivery_date',
                         'orders.returnablejar_qty',
                         'orders.delivery_time',
-                        'orders.customer_id'
+                        'orders.customer_id',
+                        'orders.selected_address_id',
+                        'orders.assigned_distributor'
                     )
-                        ->first();
+                    ->first();
 
-                    if (!$orders) {
-                        return response()->json([
-                            'response' => [
-                                'statuscode' => 401,
-                                'message' => "Order not found",
-                                'params' => ['order_id' => $order_id],
-                            ]
-                        ], 401);
+                if (!$orders) {
+                    return response()->json([
+                        'response' => [
+                            'statuscode' => 401,
+                            'message'    => "Order not found",
+                            'params'     => ['order_id' => $order_id],
+                        ]
+                    ], 401);
+                }
+
+                // ── Step 2: Get distributor SHOP lat/lang from owners_meta_data ──
+                // Use the distributor assigned to the order, not the logged-in user
+                $distributor_id = !empty($orders->assigned_distributor) ? $orders->assigned_distributor : null;
+                $shop_meta = null;
+                if ($distributor_id) {
+                    $shop_meta = Owner_meta_data::where('user_id', $distributor_id)->first();
+                }
+                
+                $distributor_lat  = !empty($shop_meta) ? $shop_meta->lat  : null;
+                $distributor_lang = !empty($shop_meta) ? $shop_meta->lang : null;
+
+                $customer = User_address::select('id', 'full_name')->where('user_id', $orders->customer_id)->first();
+
+                if (!empty($orders)) {
+                    $orders['created_date']   = $orders->delivery_date;
+                    $orders['delivery_time']  = $orders->delivery_time;
+                    $orders['customer_name']  = isset($customer) ? $customer->full_name : '';
+
+                    // ── Step 3: Haversine distance (shop → customer delivery address) ──
+                    $customer_lat  = $orders->customer_lat;
+                    $customer_lang = $orders->customer_lang;
+
+                    if (!empty($distributor_lat) && !empty($distributor_lang)
+                        && !empty($customer_lat) && !empty($customer_lang)) {
+
+                        $earth_radius = 6371; // km
+                        $d_lat  = deg2rad($customer_lat  - $distributor_lat);
+                        $d_lng  = deg2rad($customer_lang - $distributor_lang);
+                        $a = sin($d_lat / 2) * sin($d_lat / 2)
+                           + cos(deg2rad($distributor_lat)) * cos(deg2rad($customer_lat))
+                           * sin($d_lng / 2) * sin($d_lng / 2);
+                        $c   = 2 * atan2(sqrt($a), sqrt(1 - $a));
+                        $kms = round($earth_radius * $c, 2);
+
+                    } else {
+                        $kms = 0;
                     }
 
-                    $customer = User_address::select('id', 'full_name')->where('user_id', $orders->customer_id)->first();
-                    if (!empty($orders)) {
-                        $orders['created_date'] = $orders->delivery_date;
-                        $orders['delivery_time'] = $orders->delivery_time;
-                        $orders['customer_name'] = isset($customer) ? $customer->full_name : '';
+                    $orders['kms']             = $kms;          // distance in km (float)
+                    $orders['kms_text']        = $kms . " km";  // human readable
+                    $orders['shop_lat']        = $distributor_lat;
+                    $orders['shop_lang']       = $distributor_lang;
+                    $orders['customer_lat']    = $customer_lat;
+                    $orders['customer_lang']   = $customer_lang;
 
+                    $order_products = Orderproducts::where('order_id', $orders->id)->count();
+                    $orders['product_quantity'] = $order_products;
 
-
-                        $dist = $this->map($lat, $lang, $orders->customer_lat, $orders->customer_lang);
-                        $kms = str_replace(',', '.', $dist);
-                        $whatIWant = substr($kms, strpos($kms, " ") + 1);
-                        if ($whatIWant == "km") {
-                            $kms = str_replace('km', '', $kms);
-                        }
-                        else {
-                            $kms = str_replace('m', '', $kms);
-                            $kms = $kms / 1000;
-                        }
-
-                        $orders['kms'] = ($kms);
-
-
-                        // $orders['kms']=round($orders->distance,2);
-                        $order_products = Orderproducts::where('order_id', $orders->id)->count();
-                        $orders['product_quantity'] = $order_products;
-                        $user_address = User_address::where('id', $orders->selected_address_id)->first();
-                        // $orders['address']=(!empty($user_address->address) ?$user_address->address:''). ', '.(!empty($user_address->city)?$user_address->city:''). ', '.(!empty($user_address->state)?$user_address->state:''). ', '.(!empty($user_address->zip_code)?$user_address->zip_code:'');
-                        if (!empty($user_address)) {
-                            $orders['address'] = $user_address->address . ', ' . $user_address->city . ', ' . $user_address->state . ', ' . $user_address->zip_code;
-                        }
-                        else {
-
-                            $orders['address'] = "";
-                        }
-
-
-                        $orders->no_of_jars_ordered = 0;
-                        $ordered_products = Orderproducts::select('product_id')->where('order_id', $orders->id)->get();
-
-                        if ($ordered_products->isNotEmpty()) {
-                            // Get all product IDs related to the order
-                            $productIds = $ordered_products->pluck('product_id');
-
-                            // Check for products of type 'jar'
-                            $jar_product_ids = Product::whereIn('id', $productIds)
-                                ->where('type', 'jar')
-                                ->pluck('id');
-
-                            if ($jar_product_ids->isNotEmpty()) {
-                                // Sum quantities only for products that are 'jar'
-                                $orders->no_of_jars_ordered = Orderproducts::where('order_id', $orders->id)
-                                    ->whereIn('product_id', $jar_product_ids)
-                                    ->sum('quantity');
-                            }
-                        }
-
-                        $orders['no_of_jars_available'] = $orders->no_of_jars_ordered;
-                        // $orders['no_of_jars_available'] = Orderproducts::where('order_id', $orders->id)->sum('quantity');
-                        $orders['no_of_jars_returned'] = Orderproducts::where('order_id', $orders->id)->sum('no_of_jars_returned');
-                    }
-
-                    $orderdetails = OrderProducts::where('order_id', $order_id)->get();
-                    $productdetails = [];
-                    $url = url('/');
-                    foreach ($orderdetails as $key => $orderdetail) {
-                        $product = Product::where('id', $orderdetail->product_id)->first();
-                        $productdetails[$key]['product_img'] = $url . '/' . (!empty($product) ? $product->image : '');
-                        $productdetails[$key]['product_name'] = (!empty($product) ? $product->name : '');
-                        $productdetails[$key]['amount'] = $orderdetail->amount;
-                        $productdetails[$key]['product_qty'] = $orderdetail->quantity;
-                        $productdetails[$key]['returnablejar_qty'] = $orderdetail->returnablejar_qty;
-                    }
-                    $S_address = User_address::where('id', $orders->selected_address_id)->withTrashed()->first();
-                    if (!$S_address) {
-                        $S_address = null;
-                    }
-
-
-                    $U_address = collect([]);
-                    $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-
+                    $user_address = User_address::where('id', $orders->selected_address_id)->first();
                     if (!empty($user_address)) {
-                        $U_address = $user_address;
+                        $orders['address'] = $user_address->address . ', ' . $user_address->city . ', ' . $user_address->state . ', ' . $user_address->zip_code;
+                    } else {
+                        $orders['address'] = "";
                     }
-                    else {
-                        $U_address = [];
+
+                    $orders->no_of_jars_ordered = 0;
+                    $ordered_products = Orderproducts::select('product_id')->where('order_id', $orders->id)->get();
+
+                    if ($ordered_products->isNotEmpty()) {
+                        $productIds     = $ordered_products->pluck('product_id');
+                        $jar_product_ids = Product::whereIn('id', $productIds)->where('type', 'jar')->pluck('id');
+                        if ($jar_product_ids->isNotEmpty()) {
+                            $orders->no_of_jars_ordered = Orderproducts::where('order_id', $orders->id)
+                                ->whereIn('product_id', $jar_product_ids)
+                                ->sum('quantity');
+                        }
                     }
 
-
-
-
-                    $success['statuscode'] = 200;
-                    $success['message'] = "Orders lists";
-
-                    /**
-                     * params value (product_id,product_qty)
-                     **/
-                    $params['status'] = $request->status;
-                    $params['user_id'] = $user->id;
-                    $success['params'] = $params;
-                    $success['orders'] = $orders;
-                    $success['product_details'] = $productdetails;
-                    $success['address'] = $S_address;
-                    $success['lat_lang'] = $U_address;
-                    $response['response'] = $success;
-                    return response()->json($response, 200);
+                    $orders['no_of_jars_available'] = $orders->no_of_jars_ordered;
+                    $orders['no_of_jars_returned']  = Orderproducts::where('order_id', $orders->id)->sum('no_of_jars_returned');
                 }
-                else {
-                    $success['statuscode'] = 200;
-                    $success['message'] = "Address list empty";
-                    $params = [];
-                    $success['params'] = $params;
-                    $response['response'] = $success;
-                    return response()->json($response, 401);
+
+                $orderdetails   = OrderProducts::where('order_id', $order_id)->get();
+                $productdetails = [];
+                $url            = url('/');
+                foreach ($orderdetails as $key => $orderdetail) {
+                    $product = Product::where('id', $orderdetail->product_id)->first();
+                    $productdetails[$key]['product_img']       = $url . '/' . (!empty($product) ? $product->image : '');
+                    $productdetails[$key]['product_name']      = (!empty($product) ? $product->name : '');
+                    $productdetails[$key]['amount']            = $orderdetail->amount;
+                    $productdetails[$key]['product_qty']       = $orderdetail->quantity;
+                    $productdetails[$key]['returnablejar_qty'] = $orderdetail->returnablejar_qty;
                 }
+
+                $S_address = User_address::where('id', $orders->selected_address_id)->withTrashed()->first();
+                if (!$S_address) {
+                    $S_address = null;
+                }
+
+                $U_address = [];
+                $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
+                if (!empty($user_address)) {
+                    $U_address = $user_address;
+                }
+
+                $success['statuscode']      = 200;
+                $success['message']         = "Orders lists";
+                $params['status']           = $request->status;
+                $params['user_id']          = $user->id;
+                $success['params']          = $params;
+                $success['orders']          = $orders;
+                $success['product_details'] = $productdetails;
+                $success['address']         = $S_address;
+                $success['lat_lang']        = $U_address;
+                $response['response']       = $success;
+                return response()->json($response, 200);
             }
             else {
                 $success['statuscode'] = 401;
-                $success['message'] = "Please login";
-                $params = [];
-                $success['params'] = $params;
-                $response['response'] = $success;
+                $success['message']    = "Please login";
+                $params                = [];
+                $success['params']     = $params;
+                $response['response']  = $success;
                 return response()->json($response, 401);
             }
         }
         catch (Exception $e) {
             $success['statuscode'] = 401;
-            $success['message'] = "Something went wrong";
-            $params = [];
-            $success['params'] = $params;
-            $response['response'] = $success;
+            $success['message']    = "Something went wrong: " . $e->getMessage();
+            $params                = [];
+            $success['params']     = $params;
+            $response['response']  = $success;
             return response()->json($response, 401);
         }
     }
