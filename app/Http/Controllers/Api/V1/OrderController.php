@@ -579,20 +579,15 @@ class OrderController extends Controller
                 $c_no_of_ordered = 0;
                 $c_no_of_jars_returned = 0;
 
-                foreach ($carts as $cart) {
-                    // $c_no_of_ordered = 0;
-                    // $c_no_of_jars_returned = 0;
+                $order_products = OrderProducts::where('customer_id', $user->id)->get();
 
-                    $order_products = OrderProducts::where('customer_id', $user->id)->get();
+                foreach ($order_products as $p) {
+                    $order = Order::where('id', $p->order_id)->first();
+                    $product = Product::where('id', $p->product_id)->first();
 
-                    foreach ($order_products as $p) {
-                        $order = Order::where('id', $p->order_id)->first();
-                        $product = Product::where('id', $p->product_id)->first();
-
-                        if ($product && $product->type == "jar") {
-                            if ($order && $order->status == "Delivery") {
-                                $c_no_of_ordered += $p->quantity;
-                            }
+                    if ($product && $product->type == "jar") {
+                        if ($order && $order->status == "Delivery") {
+                            $c_no_of_ordered += $p->quantity;
                             $c_no_of_jars_returned += $p->no_of_jars_returned;
                         }
                     }
@@ -1241,7 +1236,7 @@ class OrderController extends Controller
                 }
 
                 $orders['floor_no'] = isset($user_address) ? $user_address->floor_no : '';
-                $orders['created_date'] = $orders->delivery_date;
+                $orders['created_date'] = $orders->created_at->format('d-m-Y h:i A');
             }
 
             $orderdetails = OrderProducts::where('order_id', $order_id)->get();

@@ -19,197 +19,138 @@ use Exception;
 
 class CartController extends Controller
 {
+    private function get_returnable_jars_count($user_id)
+    {
+        $delivered_stats = Orderproducts::join('orders', 'order_products.order_id', '=', 'orders.id')
+            ->join('products', 'order_products.product_id', '=', 'products.id')
+            ->where('order_products.customer_id', $user_id)
+            ->where('orders.status', 'Delivery')
+            ->where('products.type', 'jar')
+            ->selectRaw('SUM(order_products.quantity) as total_delivered, SUM(order_products.no_of_jars_returned) as total_returned')
+            ->first();
+
+        $delivered = (int)($delivered_stats->total_delivered ?? 0);
+        $returned = (int)($delivered_stats->total_returned ?? 0);
+
+        return max(0, $delivered - $returned);
+    }
+
+    private function get_max_jars_ordered($user_id)
+    {
+        $max = 0;
+        $orders = Order::where('customer_id', $user_id)->where('status', 'Delivery')->get();
+        foreach ($orders as $ord) {
+            $current_order_jars = Orderproducts::join('products', 'order_products.product_id', '=', 'products.id')
+                ->where('order_products.order_id', $ord->id)
+                ->where('products.type', 'jar')
+                ->sum('order_products.quantity');
+            
+            if ($current_order_jars > $max) {
+                $max = $current_order_jars;
+            }
+        }
+        return $max;
+    }
+
     public function add_to_cart(Request $request)
     {
         try {
-
             $user = Auth::user();
 
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-            if (!empty($user_address)) {
-                $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
-            } else {
-                $charges = [];
+            $charges = $user_address ? DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
+
+            $max_jars_ordered = $this->get_max_jars_ordered($user->id);
+            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
+            $available_to_return = $this->get_returnable_jars_count($user->id);
+
+            if ($request->type == "return_jar") {
+                $cart = Carts::where('id', $request->cart_id)->where('customer_id', $user->id)->first();
+                if (!$cart) {
+                    $success['statuscode'] = 404;
+                    $success['message'] = "Cart item not found";
+                    return response()->json(['response' => $success], 404);
+                }
+                $product = Product::find($cart->product_id);
+                
+                $other_returns = Carts::where('customer_id', $user->id)->where('id', '!=', $cart->id)->sum('no_of_jars_returned');
+                $requested_return = (int)$request->returnable_jarqty;
+                $allowed_return = min($requested_return, max(0, $available_to_return - $other_returns));
+                
+                $deposit_amount = max(0, ($cart->product_qty - $allowed_return) * ($product->deposit_amount ?? 150));
+                
+                $cart->no_of_jars_returned = $allowed_return;
+                $cart->deposit_amount = $deposit_amount;
+                $cart->save();
+
+                $success['statuscode'] = 200;
+                $success['message'] = "Return quantity updated";
+                $success['params'] = ['no_of_jars_returned' => $allowed_return, 'deposit_amount' => $deposit_amount];
+                return response()->json(['response' => $success], 200);
             }
 
-            // checking is with first order - calculating total jars ever ordered in any single previous order
-            $max_jars_ordered = 0;
-            $orders = Order::where('customer_id', $user->id)->get();
-            foreach ($orders as $ord) {
-                $current_order_jars = Orderproducts::join('products', 'order_products.product_id', '=', 'products.id')
-                    ->where('order_products.order_id', $ord->id)
-                    ->where('products.type', 'jar')
-                    ->sum('order_products.quantity');
-                
-                if ($current_order_jars > $max_jars_ordered) {
-                    $max_jars_ordered = $current_order_jars;
-                }
+            $product = Product::find($request->product_id);
+            if (!$product) {
+                $success['statuscode'] = 404;
+                $success['message'] = "Product not found";
+                return response()->json(['response' => $success], 404);
             }
-            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
-            
-            
-            $current_product = Product::where('id', $request->product_id)->where('type','jar')->exists();
-            
-            // JAR type - 1st order max 3, 2nd order+ max 2
-            if ($current_product) {
+
+            if ($product->type == "jar") {
                 if ($is_ordered == 0 && $request->product_qty > 3) {
-                    // 1st order - max 3 jars
                     $success['statuscode'] = 400;
                     $success['message'] = "Limit reached! Your limit is 3 for first order.";
-                    $params = [];
-                    $success['params'] = $params;
-                    $response['response'] = $success;
-                    return response()->json($response, 400);
+                    return response()->json(['response' => $success], 400);
                 }
-                // Use max_jars_ordered for future checks too if needed
-                if ($max_jars_ordered > 0 && $request->product_qty > 100) { // Example limit for returned customers
-                     // ... existing or new logic ...
-                }
-                // 2nd order onwards - No limit (removed the else if for qty > 2)
-            } else {
-                // Non-JAR products - No specific limit enforced here, allowing up to max_qty (100) in UI
-                // $request->merge(['product_qty' => 1]); // Removed this line to allow more than 1
             }
 
+            $product_price = ($user->type == "retailer" ? $product->retailer_price : $product->customer_price);
+            $discount_amount = ($user->user_type == "customer" ? ($product->customer_discount * $request->product_qty) : 0);
 
-            if ($request->type == "") {
-
-                $product = Product::where('id', $request->product_id)->first();
-                //product price
-                if ($user->type == "retailer") {
-                    $product_price = $product->retailer_price;
-                } else {
-                    $product_price = $product->customer_price;
-                }
-
-
-                if ($product->type == "jar") {
-                    // Get other jar products already in cart
-                    $other_jars_qty = Carts::join('products', 'carts.product_id', '=', 'products.id')
-                        ->where('carts.customer_id', $user->id)
-                        ->where('products.type', 'jar')
-                        ->where('carts.product_id', '!=', $request->product_id)
-                        ->sum('carts.product_qty');
-                    
-                    $total_jars_in_cart = $request->product_qty + $other_jars_qty;
-                    
-                    if ($max_jars_ordered == 0) {
-                        // First time customer: deposit for all jars (up to 3)
-                        $total_deposit_needed = $total_jars_in_cart * $product->deposit_amount;
-                    } else {
-                        // Subsequent orders: deposit only for extra jars beyond max previously ordered
-                        $total_deposit_needed = max(0, $total_jars_in_cart - $max_jars_ordered) * $product->deposit_amount;
-                    }
-
-                    // Subtract deposit already accounted for in other cart items
-                    $other_cart_deposit = Carts::join('products', 'carts.product_id', '=', 'products.id')
-                        ->where('carts.customer_id', $user->id)
-                        ->where('products.type', 'jar')
-                        ->where('carts.product_id', '!=', $request->product_id)
-                        ->sum('carts.deposit_amount');
-                    
-                    $depositamount = max(0, $total_deposit_needed - $other_cart_deposit);
-                    $no_of_jars_returned = 0;
-                    $returnable_jarqty = 0;
-                } else {
-                    $depositamount = 0;
-                    $no_of_jars_returned = 0;
-                    $returnable_jarqty = 0;
-                }
-
-
-                //Apply discount
-                if ($user->user_type == "customer") {
-                    $discount_amount = ($product->customer_discount * $request->product_qty);
-                    // var_dump($request->product_qty);
-                    // exit;
-                } else {
-                    $discount_amount = 0;
-                }
-
-
+            $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->first();
+            
+            $current_return = ($cart ? $cart->no_of_jars_returned : 0);
+            
+            if ($product->type == "jar") {
+                $deposit_amount = max(0, ($request->product_qty - $current_return) * ($product->deposit_amount ?? 150));
             } else {
-                $product_rate = Product::where('type', 'jar')->where('status', 'active')->first();
-                $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->first();
-                if ($cart->product_qty >= $request->returnable_jarqty) {
-                    $depositamount = ($cart->product_qty - $request->returnable_jarqty) * $product_rate->deposit_amount;
-                } else {
-                    $depositamount = 0;
-                }
-
-                $no_of_jars_returned = $request->returnable_jarqty;
+                $deposit_amount = 0;
+                $current_return = 0;
             }
 
-
-
-            $duplicate_check = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->first();
-
-
-            if (empty($duplicate_check)) {
+            if (!$cart) {
                 $cart = new Carts;
                 $cart->customer_id = $user->id;
                 $cart->product_id = $request->product_id;
-                $cart->product_qty = $request->product_qty;
                 $cart->product_name = $product->name;
-                $cart->discount_amount = $discount_amount;
-                $cart->delivery_charges = ((!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00');
-                // $cart->total_available_jar=$total_available_jar;
-                $cart->no_of_jars_returned = $request->returnable_jarqty;
-                $cart->status = "active";
-                $cart->price = $product_price;
-                $cart->deposit_amount = $depositamount;
-                // $cart->returnablejar_qty=$returnable_jarqty;
-                $cart->save();
-                $success_msg = "Cart added Succesfully";
-            } else {
-                if ($request->type == "") {
-                    $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->update(['product_qty' => $request->product_qty, 'discount_amount' => $discount_amount, 'delivery_charges' => ((!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00')]);
-
-                    if ($product->type == "jar") {
-                        $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->update(['deposit_amount' => $depositamount]);
-                    }
-                } else {
-                    $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->update(['deposit_amount' => $depositamount]);
-
-                    if ($request->type == "return_jar") {
-                        $cart = Carts::where('id', $request->cart_id)->where('customer_id', $user->id)->update(['no_of_jars_returned' => $no_of_jars_returned]);
-                    }
-                }
-
-
-                $success_msg = "Cart updated Succesfully";
             }
 
-
-            // 
+            $cart->product_qty = $request->product_qty;
+            $cart->price = $product_price;
+            $cart->discount_amount = $discount_amount;
+            $cart->deposit_amount = $deposit_amount;
+            $cart->delivery_charges = ($charges && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+            $cart->no_of_jars_returned = $current_return;
+            $cart->status = "active";
+            $cart->save();
 
             $success['statuscode'] = 200;
-            $success['message'] = $success_msg;
+            $success['message'] = "Cart updated successfully";
+            $success['params'] = [
+                'product_id' => $request->product_id,
+                'product_qty' => $request->product_qty,
+                'deposit_amount' => $deposit_amount,
+                'no_of_jars_returned' => $current_return
+            ];
+            return response()->json(['response' => $success], 200);
 
-            /**
-             * params value (product_id,product_qty)
-             **/
-            $params['delivery'] = (!empty($charges) ? $charges->id : '');
-            $params['product_id'] = $request->product_id;
-            $params['product_qty'] = $request->product_qty;
-            $params['user_id'] = $user->id;
-            $params['returnable_jarqty'] = $request->returnable_jarqty;
-            $params['deposit_amount'] = $depositamount;
-            $success['params'] = $params;
-            $response['response'] = $success;
-            return response()->json($response, 200);
         } catch (Exception $e) {
-            $success['statuscode'] = 401;
+            $success['statuscode'] = 500;
             $success['message'] = "Something went wrong";
-            /**
-             * params value (user_id,otp,token)
-             **/
-            $params = [];
-            $success['params'] = $params;
-            $response['response'] = $success;
-            return response()->json($response, 401);
+            return response()->json(['response' => $success], 500);
         }
     }
+
 
     public function delete_cart(Request $request)
     {
@@ -269,19 +210,13 @@ class CartController extends Controller
             $no_of_jars_returned = 0;
             $jar_quantity = 0;
 
-            $max_jars_ordered = 0;
-            $orders = Order::where('customer_id', $user->id)->get();
-            foreach ($orders as $ord) {
-                $current_order_jars = Orderproducts::join('products', 'order_products.product_id', '=', 'products.id')
-                    ->where('order_products.order_id', $ord->id)
-                    ->where('products.type', 'jar')
-                    ->sum('order_products.quantity');
-                
-                if ($current_order_jars > $max_jars_ordered) {
-                    $max_jars_ordered = $current_order_jars;
-                }
-            }
+            $max_jars_ordered = $this->get_max_jars_ordered($user->id);
             $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
+
+            $available_jar_balance = $this->get_returnable_jars_count($user->id);
+            if (!empty($user_address)) {
+                $user_address->update(['returnablejar_qty' => $available_jar_balance]);
+            }
 
             foreach ($carts as $key => $cart) {
                 $carts[$key]['order_count'] = $order_count;
@@ -296,39 +231,28 @@ class CartController extends Controller
                         $carts[$key]['default_qty'] = 3;
                         $carts[$key]['max_qty'] = 3;
                     } else {
-                        $carts[$key]['default_qty'] = 2; // Updated to 2
-                        $carts[$key]['max_qty'] = 100; // Unlimited practically
+                        $carts[$key]['default_qty'] = 2;
+                        $carts[$key]['max_qty'] = 100;
                     }
-                } else if ($is_jar_available == true) {
-                    $carts[$key]['is_jar'] = false;
-                    $is_jar_available = true;
-                    $carts[$key]['default_qty'] = 1;
-                    $carts[$key]['max_qty'] = 100; // Updated to 100
                 } else {
                     $carts[$key]['is_jar'] = false;
-                    $is_jar_available = false;
                     $carts[$key]['default_qty'] = 1;
-                    $carts[$key]['max_qty'] = 100; // Updated to 100
+                    $carts[$key]['max_qty'] = 100;
                 }
 
-                // $is_jar_available=($product->type=="jar" ? true:false);
                 $carts[$key]['product_image'] = "https://lavenjal.com/" . $product->image;
                 $carts[$key]['per_jar_rate'] = $product->deposit_amount;
-                //$subamt+=($cart->price * $cart->product_qty)+($cart->product_qty * $product->deposit_amount);
+                
                 $subamt += ($cart->price * $cart->product_qty);
                 $delivery_charge = ($cart->delivery_charges);
                 $depositamt += ($cart->deposit_amount);
-                $returnable_jarqty += ($cart->returnablejar_qty);
                 $no_of_jars_returned += $cart->no_of_jars_returned;
                 $discountamt += $cart->discount_amount;
-                if ($cart->deposit_amount != "0") {
-                    $totalamt += ($cart->price * $cart->product_qty) + ($cart->product_qty * $product->deposit_amount) - ($cart->deposit_amount);
-                } else {
-                    $totalamt += ($cart->price * $cart->product_qty) + ($cart->product_qty * $product->deposit_amount) + ($cart->deposit_amount);
-                }
+                
+                $totalamt += ($cart->price * $cart->product_qty) + $cart->deposit_amount;
             }
 
-            $have_empty_lavenjal_jars_with_cap = $user_address->returnablejar_qty;
+            $have_empty_lavenjal_jars_with_cap = $available_jar_balance;
             // foreach($carts as $key=>$cart){
             //     $carts[$key]['subamt']=$subamt;
             //     $carts[$key]['depositamt']=$depositamt;
@@ -336,7 +260,7 @@ class CartController extends Controller
             //     $carts[$key]['delivery_charge']=$delivery_charge;
             //     $carts[$key]['totalamt']=$subamt+$depositamt;
             //  }
-            $available_jar = $user_address->returnablejar_qty;
+            $available_jar = $available_jar_balance;
 
             if ($jar_quantity > 0) {
                 $delivery_charge = $jar_quantity * (!empty($delivery_charge) ? $delivery_charge : 0);
