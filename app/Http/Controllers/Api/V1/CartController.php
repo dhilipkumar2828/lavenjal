@@ -44,7 +44,7 @@ class CartController extends Controller
                 ->where('order_products.order_id', $ord->id)
                 ->where('products.type', 'jar')
                 ->sum('order_products.quantity');
-            
+
             if ($current_order_jars > $max) {
                 $max = $current_order_jars;
             }
@@ -58,10 +58,19 @@ class CartController extends Controller
             $user = Auth::user();
 
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-            $charges = $user_address ? DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
+            $charges = $user_address ?DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
 
-            $max_jars_ordered = $this->get_max_jars_ordered($user->id);
-            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
+            $is_ordered = 0;
+            $order_list = Order::where('customer_id', $user->id)->get();
+            foreach ($order_list as $ord) {
+                $ord_products = Orderproducts::where('order_id', $ord->id)->first();
+                if (!empty($ord_products)) {
+                    $ord_product = Product::where('id', $ord_products->product_id)->first();
+                    if (!empty($ord_product) && $ord_product->type == 'jar') {
+                        $is_ordered += 1;
+                    }
+                }
+            }
             $available_to_return = $this->get_returnable_jars_count($user->id);
 
             if ($request->type == "return_jar") {
@@ -72,13 +81,13 @@ class CartController extends Controller
                     return response()->json(['response' => $success], 404);
                 }
                 $product = Product::find($cart->product_id);
-                
+
                 $other_returns = Carts::where('customer_id', $user->id)->where('id', '!=', $cart->id)->sum('no_of_jars_returned');
                 $requested_return = (int)$request->returnable_jarqty;
                 $allowed_return = min($requested_return, max(0, $available_to_return - $other_returns));
-                
+
                 $deposit_amount = max(0, ($cart->product_qty - $allowed_return) * ($product->deposit_amount ?? 150));
-                
+
                 $cart->no_of_jars_returned = $allowed_return;
                 $cart->deposit_amount = $deposit_amount;
                 $cart->save();
@@ -108,12 +117,13 @@ class CartController extends Controller
             $discount_amount = ($user->user_type == "customer" ? ($product->customer_discount * $request->product_qty) : 0);
 
             $cart = Carts::where('product_id', $request->product_id)->where('customer_id', $user->id)->first();
-            
+
             $current_return = ($cart ? $cart->no_of_jars_returned : 0);
-            
+
             if ($product->type == "jar") {
                 $deposit_amount = max(0, ($request->product_qty - $current_return) * ($product->deposit_amount ?? 150));
-            } else {
+            }
+            else {
                 $deposit_amount = 0;
                 $current_return = 0;
             }
@@ -144,7 +154,8 @@ class CartController extends Controller
             ];
             return response()->json(['response' => $success], 200);
 
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 500;
             $success['message'] = "Something went wrong";
             return response()->json(['response' => $success], 500);
@@ -170,7 +181,8 @@ class CartController extends Controller
             $success['params'] = $params;
             $response['response'] = $success;
             return response()->json($response, 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
@@ -193,7 +205,8 @@ class CartController extends Controller
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
             if (!empty($user_address)) {
                 $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
-            } else {
+            }
+            else {
                 $charges = [];
             }
 
@@ -210,8 +223,17 @@ class CartController extends Controller
             $no_of_jars_returned = 0;
             $jar_quantity = 0;
 
-            $max_jars_ordered = $this->get_max_jars_ordered($user->id);
-            $is_ordered = ($max_jars_ordered > 0 ? 1 : 0);
+            $is_ordered = 0;
+            $order_list = Order::where('customer_id', $user->id)->get();
+            foreach ($order_list as $ord) {
+                $ord_products = Orderproducts::where('order_id', $ord->id)->first();
+                if (!empty($ord_products)) {
+                    $ord_product = Product::where('id', $ord_products->product_id)->first();
+                    if (!empty($ord_product) && $ord_product->type == 'jar') {
+                        $is_ordered += 1;
+                    }
+                }
+            }
 
             $available_jar_balance = $this->get_returnable_jars_count($user->id);
             if (!empty($user_address)) {
@@ -226,29 +248,31 @@ class CartController extends Controller
                     $carts[$key]['is_jar'] = true;
                     $is_jar_available = true;
                     $jar_quantity += $cart->product_qty;
-                    
+
                     if ($is_ordered == 0) {
                         $carts[$key]['default_qty'] = 3;
                         $carts[$key]['max_qty'] = 3;
-                    } else {
+                    }
+                    else {
                         $carts[$key]['default_qty'] = 2;
                         $carts[$key]['max_qty'] = 100;
                     }
-                } else {
+                }
+                else {
                     $carts[$key]['is_jar'] = false;
                     $carts[$key]['default_qty'] = 1;
-                    $carts[$key]['max_qty'] = 100;
+                    $carts[$key]['max_qty'] = 10;
                 }
 
                 $carts[$key]['product_image'] = "https://lavenjal.com/" . $product->image;
                 $carts[$key]['per_jar_rate'] = $product->deposit_amount;
-                
+
                 $subamt += ($cart->price * $cart->product_qty);
                 $delivery_charge = ($cart->delivery_charges);
                 $depositamt += ($cart->deposit_amount);
                 $no_of_jars_returned += $cart->no_of_jars_returned;
                 $discountamt += $cart->discount_amount;
-                
+
                 $totalamt += ($cart->price * $cart->product_qty) + $cart->deposit_amount;
             }
 
@@ -287,7 +311,8 @@ class CartController extends Controller
 
             $response['response'] = $success;
             return response()->json($response, 200);
-        } catch (Exception $e) {
+        }
+        catch (Exception $e) {
             $success['statuscode'] = 401;
             $success['message'] = "Something went wrong";
             /**
