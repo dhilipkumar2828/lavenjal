@@ -37,260 +37,242 @@ class Helper{
      }  
     
   
+    /**
+     * Generate a short-lived OAuth2 Bearer token from a Firebase service account JSON file.
+     * Used for FCM HTTP v1 API authentication.
+     */
+    public static function getFcmAccessToken($serviceAccountPath)
+    {
+        if (!file_exists($serviceAccountPath)) {
+            \Log::error("FCM service account file not found: " . $serviceAccountPath);
+            return null;
+        }
+
+        $serviceAccount = json_decode(file_get_contents($serviceAccountPath), true);
+        if (empty($serviceAccount)) {
+            \Log::error("FCM service account JSON is invalid: " . $serviceAccountPath);
+            return null;
+        }
+
+        $privateKey  = $serviceAccount['private_key'];
+        $clientEmail = $serviceAccount['client_email'];
+        $tokenUri    = $serviceAccount['token_uri'];
+
+        $now = time();
+        $jwtHeader  = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $jwtClaims  = base64_encode(json_encode([
+            'iss'   => $clientEmail,
+            'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+            'aud'   => $tokenUri,
+            'iat'   => $now,
+            'exp'   => $now + 3600,
+        ]));
+
+        // URL-safe base64 encode
+        $jwtHeader = str_replace(['+', '/', '='], ['-', '_', ''], $jwtHeader);
+        $jwtClaims = str_replace(['+', '/', '='], ['-', '_', ''], $jwtClaims);
+
+        $signingInput = $jwtHeader . '.' . $jwtClaims;
+
+        $signature = '';
+        $key = openssl_pkey_get_private($privateKey);
+        if (!$key || !openssl_sign($signingInput, $signature, $key, 'SHA256')) {
+            \Log::error("FCM JWT signing failed.");
+            return null;
+        }
+
+        $jwtSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+        $jwt = $signingInput . '.' . $jwtSignature;
+
+        // Exchange JWT for access token
+        $ch = curl_init($tokenUri);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion'  => $jwt,
+        ]));
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $token = json_decode($response, true);
+        return $token['access_token'] ?? null;
+    }
+
+
     public static function SendNotification($title,$body,$type,$val,$user_id){
         $find_user=User::find($user_id);
-      $url = 'https://fcm.googleapis.com/fcm/send';
-      if($type=="login"){
-            // $FcmToken ="";
-            $fctoken="";
-            // $FcmToken = User::where('id',$find_user->id)->pluck('device_key')->all();
 
-              $FcmToken = $val;  
+      if($type=="login"){
+            $fctoken="";
+            $FcmToken = $val;  
       }
        
       else if($type=="order_status"){
-         
-     
           $order=Order::where('id',$val)->first();
               if($order->user_type=="customer"){
                   $FcmToken = User::whereNotNull('device_key')->where('id',$order->customer_id)->pluck('device_key')->all();
-                      $delivery=User::select('id','name')->where('id',$order->assigned_deliveryboy)->first();
-                   
+                  $delivery=User::select('id','name')->where('id',$order->assigned_deliveryboy)->first();
                   if($order->status=="On the way"){
-                        $body="Your Order has been accepted by ".$delivery->name. " ";
+                        $body="Your Order has been accepted by ".$delivery->name." ";
                   }
                   if($order->status=="Delivery"){
                         $body="Your Order delivered successfully";
                   }
               }else if($order->user_type=="delivery_agent" || $order->user_type=="retailer"){
-            
                     $FcmToken = User::whereNotNull('device_key')->where('id',$order->customer_id)->pluck('device_key')->all();
-                     $distributor=User::select('id','name')->where('id',$order->assigned_distributor)->first();
-                   
+                    $distributor=User::select('id','name')->where('id',$order->assigned_distributor)->first();
                   if($order->status=="On the way"){
-                        $body="Your Order has been accepted by ".$distributor->name. " ";
+                        $body="Your Order has been accepted by ".$distributor->name." ";
                   }
                   if($order->status=="Delivery"){
                         $body="Your Order delivered successfully";
                   } 
-                }else{
+              }else{
                   $FcmToken="";
                   $fctoken="";
               }
-          
         }    
         else if($type=="adminorder_status"){
             $order=Order::where('id',$val)->first();
             if($order->status=="On the way"){
-            if($order->user_type=="customer"){
-             $user=User::where('id',$order->assigned_deliveryboy)->first();
-              $body=$order->order_id." Order has been accpeted by ".$user->name;
+                if($order->user_type=="customer"){
+                    $user=User::where('id',$order->assigned_deliveryboy)->first();
+                    $body=$order->order_id." Order has been accpeted by ".$user->name;
+                }else{
+                    $user=User::where('id',$order->assigned_distributor)->first();
+                    $body=$order->order_id." Order has been accpeted by ".$user->name;
+                }
+                $FcmToken = User::whereNotNull('device_key')->where('user_type',"admin")->pluck('device_key')->all();
             }else{
-                 $user=User::where('id',$order->assigned_distributor)->first();
-                 $body=$order->order_id." Order has been accpeted by ".$user->name;
-            }
-            
-              $FcmToken = User::whereNotNull('device_key')->where('user_type',"admin")->pluck('device_key')->all();
-              
-            }else{
-                  $FcmToken="";
-                  $fctoken="";
+                $FcmToken="";
+                $fctoken="";
             }
         }
         else if($type=="checkout"){
-            // $order=Order::where('id',$val)->first();
-            //   $FcmToken = User::whereNotNull('device_key')->where('user_type',"admin")->pluck('device_key')->all();
-            //   $body=$body ." $order->user_type";
+            // Reserved for future use
         }
         else if($type=="checkout_retailer"){
             $order=Order::where('id',$val)->first();
             if($order->user_type!="customer"){
               $FcmToken = User::whereNotNull('device_key')->where('user_type',"retailer")->pluck('device_key')->all();
               $body="Order placed from ".$order->user_type;
-   
             }else{
-                  $FcmToken="";
-                  $fctoken="";
+                $FcmToken="";
+                $fctoken="";
             }
-    
         }
-        
         else if($type=="checkout_customer"){
-          
-            //   $ord=Order::where('id',$val)->first();
-            //   $delivery=Owner_meta_data::where('user_type','delivery_agent')->get();
-            //   $ShippingAddress=ShippingAddress::where('order_id',$val)->first();
-            //   if(!empty($ShippingAddress)){
-            //       $checkuser_address=User_address::where('id',$ShippingAddress->address_id)->first();
-            //       $lat=$checkuser_address->lat;
-            //       $lang=$checkuser_address->lang;
-            //   }else{
-            //         $lat="";
-            //       $lang="";
-            //   }
-            //   $FcmToken=array();
-            //   foreach($delivery as $d){
-                  
-                  
-            //           $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins=".$d->lat.",".$d->lang."&destinations=".$lat.",".$lang."&mode=driving&language=pl-PL&key=AIzaSyB9YDxNdancLReCY2MbDGAXQdtAFjlc7-Y";
-            //             //   $dist='';
-            //                 $ch = curl_init();
-            //                 curl_setopt($ch, CURLOPT_URL, $url);
-            //                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            //                 curl_setopt($ch, CURLOPT_PROXYPORT, 3128);
-            //                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            //                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-            //                 $response = curl_exec($ch);
-            //          $response_a = json_decode($response, true);
-            //                 if (isset($response_a['rows'][0]['elements'][0]['distance']['text'])) {
-            //                   $m = $response_a['rows'][0]['elements'][0]['distance']['text'];
-            //                 }else{
-            //                   $m = 0;
-            //                 }
-                        
-            //                 $kms=str_replace(',','.',$m);
-            //               // $kms=str_replace('km','',$kms);
-            //                 $whatIWant = substr($kms, strpos($kms, " ") + 1); 
-            //                 if($whatIWant=="km"){
-            //                   $kms=str_replace('km','',$kms);  
-            //                 }else{
-            //                     $kms=str_replace('m','',$kms);
-            //                 }
-                          
-            //               $orders['kms']= ($kms);
-                         
-
-            //                 if((number_format($kms,2))<=5.0){
-            //                   $FcmToken = User::whereNotNull('device_key')->where('ID',$d->user_id)->pluck('device_key')->all();
-            //                  // array_push($FcmToken,$token);
-            //                 }
-                     
-                        
-            //      }
-                // var_dump($FcmToken);
-                   //  $FcmToken=implode(',',$FcmToken[0]);  
-                // $FcmToken = User::whereNotNull('device_key')->where('ID',$order->customer_id)->pluck('device_key')->all();
-                // $body="Your order has been placed";
-              
-            
-            
-                      $order=Order::where('id',$val)->first();
-              $FcmToken = User::whereNotNull('device_key')->where('user_type',"delivery_agent")->where('id',1836)->where('device_key','!=',"")->pluck('device_key')->all();  
-              $find_user->user_type="delivery_agent";
-            //   $body="order placed ff";
-        }
-         else if($type=="checkout_customernoty"){
             $order=Order::where('id',$val)->first();
-            //   $FcmToken = User::whereNotNull('device_key')->where('user_type',"delivery_agent")->pluck('device_key')->all();
-              
-                $FcmToken = User::whereNotNull('device_key')->where('id',$order->customer_id)->pluck('device_key')->all();
-                $body="Your order has been placed";
-               
+            $FcmToken = User::whereNotNull('device_key')->where('user_type',"delivery_agent")->where('id',1836)->where('device_key','!=',"'")->pluck('device_key')->all();
+            $find_user->user_type="delivery_agent";
         }
-        
-        
+        else if($type=="checkout_customernoty"){
+            $order=Order::where('id',$val)->first();
+            $FcmToken = User::whereNotNull('device_key')->where('id',$order->customer_id)->pluck('device_key')->all();
+            $body="Your order has been placed";
+        }
         else if($type=="register"){
-              $FcmToken = User::whereNotNull('device_key')->where('user_type',"admin")->pluck('device_key')->all();
-              $user=User::where('id',$val)->first();
-              if($user->user_type=="customer"){
-                  $body="New customer has been registered";
-              }else if($user->user_type=="distributor"){
-                  $body="New Distributor has been Registered and waiting for your Approval";
-              }else if($user->user_type=="delivery_agent"){
-                  $body="New Delivery agent has been Registered and waiting for your Approval";
-              }else{
-                  $body="New Retailer has been Registered and waiting for your Approval";
-              }
+            $FcmToken = User::whereNotNull('device_key')->where('user_type',"admin")->pluck('device_key')->all();
+            $user=User::where('id',$val)->first();
+            if($user->user_type=="customer"){
+                $body="New customer has been registered";
+            }else if($user->user_type=="distributor"){
+                $body="New Distributor has been Registered and waiting for your Approval";
+            }else if($user->user_type=="delivery_agent"){
+                $body="New Delivery agent has been Registered and waiting for your Approval";
+            }else{
+                $body="New Retailer has been Registered and waiting for your Approval";
+            }
         }
         else{
-          $FcmToken = User::whereNotNull('device_key')->pluck('device_key')->all();
-      }
+            $FcmToken = User::whereNotNull('device_key')->pluck('device_key')->all();
+        }
        
+      // Resolve FCM token list
       if(!empty($FcmToken) && $type!="login"){
-        $result=[];
-            foreach($FcmToken as $f){
-                $value=json_decode($f);
-                $result[]=$value;
-                
-            }
-            $tokens=array_merge(...$result);
-      }else if( $type=="login"){
+          $result=[];
+          foreach($FcmToken as $f){
+              $value=json_decode($f);
+              $result[]=$value;
+          }
+          $tokens=array_merge(...$result);
+      }else if($type=="login"){
           $tokens=array($FcmToken);
       }else{
           $fctoken="";
           $tokens=array($fctoken);
       }
-  
-      //for mobile
-       
 
-                    
-                    
+      // -------------------------------------------------------
+      // FCM HTTP v1 API — Service Account per user type
+      // -------------------------------------------------------
       if($find_user->user_type=="customer" || $find_user->user_type=="retailer"){
-
-             $serverKey ='AAAA5gyYFKM:APA91bFs37r-WSRrlVUixCGLS4k_9j_ZKJrYJt9MjduLllXIpox7CCrMTYxUmuNfajZLo1pC1MgBg9RRyEdS-17rFTUWxUomtHXqj1RDxelke-t00eJv4NOqupldI310gQ9k5noko61B';
-     }else{
-        
-
-            $serverKey ='AAAASjpEv7s:APA91bHk2rejJi004ENKItdn-jCureZzhfvkjVwy4T12xHx27dhQdH8r9Y_f8bCaJWLToAQJld7CNXp-bxLuX1Z0iEuUvzDaCY6WzNiSU6B1ySjrRFrouenE38w5eImi1vYt3OQmGruO';
+          // Customer / Retailer — Firebase project: lavenjal-user
+          $serviceAccountPath = storage_path('app/firebase/customer-service-account.json');
+          $fcmProjectId       = 'lavenjal-user';
+      } else {
+          // Distributor / Delivery Boy — Firebase project: lavenjal-delivery
+          $serviceAccountPath = storage_path('app/firebase/distributor-service-account.json');
+          $fcmProjectId       = 'lavenjal-delivery';
       }
-      //for desktop
-                // $serverKey='AAAASjpEv7s:APA91bHk2rejJi004ENKItdn-jCureZzhfvkjVwy4T12xHx27dhQdH8r9Y_f8bCaJWLToAQJld7CNXp-bxLuX1Z0iEuUvzDaCY6WzNiSU6B1ySjrRFrouenE38w5eImi1vYt3OQmGruO';
-              
 
-            $data = [
-                "registration_ids" =>$tokens,
-                "notification" => [
-                    "title" => "$title",
-                    "body" => $body,  
-                ]
-            ];
-            $encodedData = json_encode($data);
-        
-            $headers = [
-                'Authorization:key='. $serverKey,
-                'Content-Type: application/json',
-            ];
-        
-            $ch = curl_init();
-          
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-            // Disabling SSL Certificate support temporarly
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);        
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedData);
-                
-            $result = curl_exec($ch);
-        //   /
-            if ($result === FALSE) {
-             
-                die('Curl failed: ' . curl_error($ch));
-            } 
-            // else{
-            //     var_dump($result);
-            // }
-     
-   
-            curl_close($ch);
-            return $result;
-            
-           //echo($result);
+      // Get OAuth2 Bearer token from service account
+      $accessToken = self::getFcmAccessToken($serviceAccountPath);
 
+      if(empty($accessToken)){
+          \Log::error("FCM: Failed to get access token for user_type: " . $find_user->user_type);
+          return json_encode(['error' => 'Failed to get FCM access token.']);
+      }
+
+      $fcmUrl  = 'https://fcm.googleapis.com/v1/projects/' . $fcmProjectId . '/messages:send';
+      $results = [];
+
+      foreach($tokens as $token){
+          if(empty($token)) continue;
+
+          $data = [
+              "message" => [
+                  "token" => $token,
+                  "notification" => [
+                      "title" => $title,
+                      "body"  => $body,
+                  ],
+              ]
+          ];
+
+          $headers = [
+              'Authorization: Bearer ' . $accessToken,
+              'Content-Type: application/json',
+          ];
+
+          $ch = curl_init();
+          curl_setopt($ch, CURLOPT_URL, $fcmUrl);
+          curl_setopt($ch, CURLOPT_POST, true);
+          curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+          curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+          curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+          curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+          curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+          curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+          $result = curl_exec($ch);
+          if ($result === FALSE) {
+              $results[] = ['error' => 'Curl failed: ' . curl_error($ch)];
+          } else {
+              $results[] = json_decode($result, true);
+          }
+          curl_close($ch);
+      }
+
+      return json_encode($results);
     }
     
     
     
      public static function Notification($token,$user_id){
- 
-        
-      
-      $this->SendNotification("Welcome Rahul","Successfully Logged in","login",$token,$user_id);
-                           
-      
+        self::SendNotification("Welcome","Successfully Logged in","login",$token,$user_id);
     }
     
     
