@@ -860,13 +860,13 @@ class AuthController extends Controller
                         $needed_servicelist->save();
               //  }
                         
-                       $success['statuscode'] =200;
+                       $success['statuscode'] =400;
                        $success['message']="Service unavailable";
                        $success['service_available']=false;
                        $params['pincode']=$request->pincode;
                        $success['params']=$params;
                        $response['response']=$success;
-                       return response()->json($response, 200); 
+                       return response()->json($response, 400); 
             }
         }       
         catch(Exception $e){
