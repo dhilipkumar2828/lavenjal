@@ -81,10 +81,12 @@ class Handler extends ExceptionHandler
                 'Auth' => $request->header('Authorization'),
                 'Exception' => get_class($e)
             ]);
+            $msg = ($status == 401) ? (empty($request->header('Authorization')) ? 'Authorization header is missing' : 'Unauthenticated or Invalid Token') : ($e->getMessage() ?: 'Something went wrong');
+
             return response()->json([
                 'response' => [
                     'statuscode' => $status,
-                    'message' => ($status == 401) ? 'Unauthenticated or Invalid Token' : ($e->getMessage() ?: 'Something went wrong'),
+                    'message' => $msg,
                     'error' => true
                 ]
             ], $status);

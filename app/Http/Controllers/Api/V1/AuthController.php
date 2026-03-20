@@ -267,12 +267,11 @@ class AuthController extends Controller
                
                         $token_arr=array_merge($device_key,$token);
 
-                        $token_array=array_unique($token_arr);
-        
+                        $token_array = array_unique(array_filter($token_arr));
                     }
-                        $result=json_encode($token_array);
+                    $result = json_encode(array_values($token_array));
 
-                  $user->update(['device_key'=>$result]);
+                    $user->update(['device_key' => $result]);
                  $res=  Helper::SendNotification("Welcome ".$user->name."","Successfully Logged in","login",$request->token,$request->user_id);
                    
                    $success['statuscode'] =200;
@@ -735,8 +734,8 @@ class AuthController extends Controller
     {
         $user=Auth::user();
         try{
-            if(!empty($user)){
-                auth()->user()->update(['device_key'=>$request->token]);
+            if(!empty($user) && !empty($request->token)){
+                auth()->user()->update(['device_key' => json_encode(array_unique(array_filter((array)$request->token)))]);
                $success['statuscode'] =200;
                $success['message']="Token stored successfully";
                $params=[];
@@ -760,56 +759,81 @@ class AuthController extends Controller
     
     
     
-   public function user_details(Request $request){
-       try{
-                //user details
-                    $user=User::find(Auth::user()->id);
-               
-                    $owners_meta_data=Owner_meta_data::where('user_id',Auth::user()->id)->first();
-                    if(!empty($owners_meta_data->lat) && !empty($owners_meta_data->lang)){
-                        $user_details['lat']=$owners_meta_data->lat;
-                        $user_details['lang']=$owners_meta_data->lang;
-                    }else{
-                        $user_details['lat']="";
-                        $user_details['lang']="";
-                    }
+    public function user_details(Request $request)
+    {
+        try {
+            $user = User::find(Auth::user()->id);
+            $owners_meta_data = Owner_meta_data::where('user_id', $user->id)->first();
 
-                    $user_details['user_name']=$user->name;
-                    $user_details['phone_number']=$user->phone;
-                    $user_details['email']=$user->email;
+            // Handle image upload if it's a POST request
+            if ($request->isMethod('post')) {
+                if ($request->hasFile('govt_certificate')) {
+                    $file = $request->file('govt_certificate');
+                    $file_name = time() . '_' . $file->getClientOriginalName();
+                    $file->move(public_path() . '/uploads/', $file_name);
+                    $path = 'uploads/' . $file_name;
 
-                    if($user->user_type=="customer"){
-                        $user_details['business_certificate']="";
-                        $user_details['gst_certificate']=""; 
-                        $user_details['shop_photo']=""; 
+                    if ($owners_meta_data) {
+                        $owners_meta_data->update(['govt_certificate' => $path]);
+                    } else {
+                        // Create new record if it doesn't exist
+                        Owner_meta_data::create([
+                            'user_id' => $user->id,
+                            'user_type' => $user->user_type,
+                            'govt_certificate' => $path
+                        ]);
+                        $owners_meta_data = Owner_meta_data::where('user_id', $user->id)->first();
                     }
+                }
+            }
 
-                    $user_details['aadhar_number']=(!empty($user->aadhar_number)?$user->aadhar_number:"");
-                    
-                    //Retailer
-                    if($user->user_type=="retailer"){
-                      $user_details['shop_name']=(isset($owners_meta_data)?$owners_meta_data->name_of_shop:""); 
-                      $user_details['shop_address']=(isset($owners_meta_data)?$owners_meta_data->full_address:"");
-                    
-                      $user_details['business_certificate']=(!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : ""); 
-                
-                      $user_details['gst_certificate']=""; 
-                      $user_details['shop_photo']=""; 
-                    }
-                    
-                    if($user->user_type=="delivery_agent" || $user->user_type=="distributor"){
-                        $address=User_address::where('user_id',$user->id)->where('is_default','true')->first();
-                        $user_details['shop_name']=(isset($owners_meta_data)?$owners_meta_data->name_of_shop:""); 
-                        $user_details['shop_nature']=(isset($owners_meta_data)?$owners_meta_data->nature_of_shop:""); 
-                        $user_details['ownership_status']=(isset($owners_meta_data)?$owners_meta_data->ownership_type:"");
-                        $user_details['address']=(isset($address)?$address->address:"");
-                        // $user_details['delivery_facility']=(!empty($owners_meta_data)?$owners_meta_data->delivery_facility:"");
-                        $user_details['no_of_delivery_person']=(isset($owners_meta_data)?$owners_meta_data->no_of_delivery_boys:"");
-                        
-                        $user_details['business_certificate']=(!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : ""); 
-                        $user_details['gst_certificate']=(!empty($owners_meta_data->gst_certificate) ? url('/') . '/' . $owners_meta_data->gst_certificate : ""); 
-                        $user_details['shop_photo']=(!empty($owners_meta_data->shop_photo) ? url('/') . '/' . $owners_meta_data->shop_photo : ""); 
-                    }
+            if (!empty($owners_meta_data->lat) && !empty($owners_meta_data->lang)) {
+                $user_details['lat'] = $owners_meta_data->lat;
+                $user_details['lang'] = $owners_meta_data->lang;
+            } else {
+                $user_details['lat'] = "";
+                $user_details['lang'] = "";
+            }
+
+            $user_details['user_name'] = $user->name;
+            $user_details['phone_number'] = $user->phone;
+            $user_details['email'] = $user->email;
+
+            if ($user->user_type == "customer") {
+                $user_details['business_certificate'] = "";
+                $user_details['gst_certificate'] = "";
+                $user_details['shop_photo'] = "";
+                $user_details['govt_certificate'] = "";
+            }
+
+            $user_details['aadhar_number'] = (!empty($user->aadhar_number) ? $user->aadhar_number : "");
+
+            //Retailer
+            if ($user->user_type == "retailer") {
+                $user_details['shop_name'] = (isset($owners_meta_data) ? $owners_meta_data->name_of_shop : "");
+                $user_details['shop_address'] = (isset($owners_meta_data) ? $owners_meta_data->full_address : "");
+
+                $user_details['business_certificate'] = (!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : "");
+
+                $user_details['gst_certificate'] = "";
+                $user_details['shop_photo'] = "";
+                $user_details['govt_certificate'] = "";
+            }
+
+            if ($user->user_type == "delivery_agent" || $user->user_type == "distributor") {
+                $address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
+                $user_details['shop_name'] = (isset($owners_meta_data) ? $owners_meta_data->name_of_shop : "");
+                $user_details['shop_nature'] = (isset($owners_meta_data) ? $owners_meta_data->nature_of_shop : "");
+                $user_details['ownership_status'] = (isset($owners_meta_data) ? $owners_meta_data->ownership_type : "");
+                $user_details['address'] = (isset($address) ? $address->address : "");
+                // $user_details['delivery_facility']=(!empty($owners_meta_data)?$owners_meta_data->delivery_facility:"");
+                $user_details['no_of_delivery_person'] = (isset($owners_meta_data) ? $owners_meta_data->no_of_delivery_boys : "");
+
+                $user_details['business_certificate'] = (!empty($user->business_certificate) ? url('/') . '/' . $user->business_certificate : "");
+                $user_details['gst_certificate'] = (!empty($owners_meta_data->gst_certificate) ? url('/') . '/' . $owners_meta_data->gst_certificate : "");
+                $user_details['shop_photo'] = (!empty($owners_meta_data->shop_photo) ? url('/') . '/' . $owners_meta_data->shop_photo : "");
+                $user_details['govt_certificate'] = (!empty($owners_meta_data->govt_certificate) ? url('/') . '/' . $owners_meta_data->govt_certificate : "");
+            }
                     if(!empty($owners_meta_data)){
                         $user_details['address']=$owners_meta_data->full_address;
                     }else{

@@ -148,15 +148,18 @@ class OrderController extends Controller
                 ], 400);
             }
 
-            $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
-                ->where('status', 'active')
-                ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
-                ->first();
-            if (empty($get_shipadd)) {
-                return response()->json([
-                    'error' => 'Input warning',
-                    'message' => 'Invalid Floor Selected',
-                ], 400);
+            $deliveramt = 0;
+            if ($selectedAddress->is_lift == 'true' || $selectedAddress->is_lift == '1') {
+                if ($selectedAddress->floor_no > 1) {
+                    $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
+                        ->where('status', 'active')
+                        ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
+                        ->first();
+                    
+                    if (!empty($get_shipadd)) {
+                        $deliveramt = (float)$get_shipadd->amount;
+                    }
+                }
             }
 
             $pincode = Pincode::where('pincode', $selectedAddress->zip_code)->first();
@@ -262,7 +265,7 @@ class OrderController extends Controller
             $order->returnablejar_qty = $returnablejar_qty;
             $order->sub_total = round($subamt);
             $order->deposit_amount = round($depositamt);
-            $order->deliver_charge = round($deliveramt);
+            $order->deliver_charge = $deliveramt * ($jar_quantity > 0 ? $jar_quantity : 1);
 
             if (!$isOrderAlreadyExist) {
                 $order->save();
@@ -284,7 +287,7 @@ class OrderController extends Controller
 
                 $shipping_address = new ShippingAddress;
                 $shipping_address->order_id = $order->id;
-                $shipping_address->address_id = $request->address_id;
+                $shipping_address->address_id = (!empty($request->address_id) ? $request->address_id : $selectedAddress->id);
                 $shipping_address->save();
             }
 
@@ -417,29 +420,31 @@ class OrderController extends Controller
             $carts = Carts::where('customer_id', $user->id)->where('status', 'active')->get();
             $orderid = Str::upper('LVJ-' . Str::random(6));
             $selectedAddress = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
+            $deliveramt = 0;
             if (!empty($selectedAddress)) {
-                $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
-                    ->where('status', 'active')
-                    ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
-                    ->first();
+                if ($selectedAddress->is_lift == 'true' || $selectedAddress->is_lift == '1') {
+                    if ($selectedAddress->floor_no > 1) {
+                        $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
+                            ->where('status', 'active')
+                            ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
+                            ->first();
+                        $deliveramt = (!empty($get_shipadd) ? (float)$get_shipadd->amount : 0.0);
+                    }
+                }
 
                 $pincode = Pincode::where('pincode', $selectedAddress->zip_code)->first();
 
                 if (!empty($pincode)) {
                     $selectedAddress->isServiceAvailable = true;
-                }
-                else {
+                } else {
                     $selectedAddress->isServiceAvailable = false;
                 }
             }
-            else {
-                $get_shipadd = [];
-            }
-            $products = [];
 
+            $products = [];
             $subamt = 0;
             $depositamt = 0;
-            $deliveramt = 0;
+            $deliveramt_base = $deliveramt; // Store the per-jar amount found earlier
             $returnablejar_qty = 0;
             $total_available_jar = 0;
             $jars_ordered = 0;
@@ -459,16 +464,16 @@ class OrderController extends Controller
             }
 
             if ($jars_ordered > 0)
-                $deliveramt = $jars_ordered * (!empty($get_shipadd) ? $get_shipadd->amount : 0);
+                $deliveramt_total = $jars_ordered * $deliveramt;
             else
-                $deliveramt = (!empty($get_shipadd) ? $get_shipadd->amount : '');
+                $deliveramt_total = $deliveramt;
 
             //price details
             $price_details = collect([]);
             $price_details->put("sub_amount", $subamt);
             $price_details->put("deposit_amount", $depositamt);
-            $price_details->put("deliver_charges", $deliveramt);
-            $price_details->put("total_amount", ($user->user_type == "customer" ? (($subamt + $depositamt + $deliveramt) - $discountamt) : $subamt + $depositamt + $deliveramt));
+            $price_details->put("deliver_charges", $deliveramt_total);
+            $price_details->put("total_amount", ($user->user_type == "customer" ? (($subamt + $depositamt + $deliveramt_total) - $discountamt) : $subamt + $depositamt + $deliveramt_total));
             $price_details->put("discount_amount", ($user->user_type == "customer" ? $discountamt : ''));
 
             //Item details
@@ -526,25 +531,31 @@ class OrderController extends Controller
 
             $owners_meta_data = Owner_meta_data::select('assigned_distributor')->where('user_id', $user->id)->first();
             $get_useradd = User_address::where('id', $request->address_id)->first();
-            if (!empty($get_useradd)) {
-                $get_shipadd = DeliveryCharges::where('floor_no', $get_useradd->floor_no)
-                    ->where('status', 'active')
-                    ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
-                    ->first();
-            }
-            else {
-                $get_shipadd = [];
+            $deliveramt = 0;
+            if (!empty($get_useradd) && ($get_useradd->is_lift == 'true' || $get_useradd->is_lift == '1')) {
+                if ($get_useradd->floor_no > 1) {
+                    $get_shipadd = DeliveryCharges::where('floor_no', $get_useradd->floor_no)
+                        ->where('status', 'active')
+                        ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
+                        ->first();
+                    $deliveramt = (!empty($get_shipadd) ? (float)$get_shipadd->amount : 0.0);
+                }
             }
 
             $orderid = $request->order_id;
             $carts = Carts::where('customer_id', $user->id)->where('status', 'active')->get();
             $subamt = 0;
             $depositamt = 0;
-            $deliveramt = (!empty($get_shipadd) ? $get_shipadd->amount : '');
             $returnablejar_qty = 0;
             $total_available_jar = 0;
             $discountamt = 0;
+            $jars_ordered = 0;
+
             foreach ($carts as $cart) {
+                $product = Product::find($cart->product_id);
+                if ($product && $product->type == "jar") {
+                    $jars_ordered += $cart->product_qty;
+                }
                 $subamt += $cart->product_qty * $cart->price;
                 $depositamt += $cart->deposit_amount;
                 $returnablejar_qty += $cart->returnablejar_qty;
@@ -567,6 +578,7 @@ class OrderController extends Controller
                 $notifications->type = "orders";
                 $notifications->save();
 
+                // Save notification for Customer
                 Mobile_notifications::where('user_id', $user->id)->where('order_id', $orderid)->where('type', 'orders')->delete();
                 $notifications = new Mobile_notifications;
                 $notifications->user_id = $user->id;
@@ -575,18 +587,62 @@ class OrderController extends Controller
                 $notifications->type = "orders";
                 $notifications->created_at = now();
                 $notifications->save();
+                
+                // Save notification for Assigned Distributor and their Delivery Agents
+                $order_record = Order::where('order_id', $orderid)->first();
+                $distributor_ids = [];
+                if ($order_record && !empty($order_record->assigned_distributor) && $order_record->assigned_distributor != 0) {
+                    $distributor_ids[] = $order_record->assigned_distributor;
+                } else if ($order_record) {
+                    $zip_code = User_address::where('id', $order_record->selected_address_id)->value('zip_code');
+                    if (!empty($zip_code)) {
+                        // Only match real distributor accounts, not agents/retailers
+                        $distributor_ids = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
+                            ->where('users.user_type', 'distributor')
+                            ->where('owners_meta_data.pincode', $zip_code)
+                            ->pluck('owners_meta_data.user_id')->all();
+                    }
+                }
+
+                if (!empty($distributor_ids)) {
+                    foreach ($distributor_ids as $dist_id) {
+                        // Notify Distributor
+                        $dist_notifications = new Mobile_notifications;
+                        $dist_notifications->user_id = $dist_id;
+                        $dist_notifications->order_id = $orderData->id;
+                        $dist_notifications->message = "order_placed";
+                        $dist_notifications->type = "orders";
+                        $dist_notifications->created_at = now();
+                        $dist_notifications->save();
+
+                        // Notify all Delivery Agents belonging to this distributor
+                        $delivery_agent_ids = Owner_meta_data::where('assigned_distributor', $dist_id)
+                            ->pluck('user_id')
+                            ->all();
+                        
+                        foreach ($delivery_agent_ids as $agent_uid) {
+                            $agent_notifications = new Mobile_notifications;
+                            $agent_notifications->user_id = $agent_uid;
+                            $agent_notifications->order_id = $orderData->id;
+                            $agent_notifications->message = "order_placed";
+                            $agent_notifications->type = "orders";
+                            $agent_notifications->created_at = now();
+                            $agent_notifications->save();
+                        }
+                    }
+                }
 
                 $c_no_of_ordered = 0;
                 $c_no_of_jars_returned = 0;
 
-                $order_products = OrderProducts::where('customer_id', $user->id)->get();
+                $order_products = Orderproducts::where('customer_id', $user->id)->get();
 
                 foreach ($order_products as $p) {
-                    $order = Order::where('id', $p->order_id)->first();
+                    $order_ref = Order::where('id', $p->order_id)->first();
                     $product = Product::where('id', $p->product_id)->first();
 
                     if ($product && $product->type == "jar") {
-                        if ($order && $order->status == "Delivery") {
+                        if ($order_ref && $order_ref->status == "Delivery") {
                             $c_no_of_ordered += $p->quantity;
                             $c_no_of_jars_returned += $p->no_of_jars_returned;
                         }
@@ -597,12 +653,8 @@ class OrderController extends Controller
 
                 Carts::where('customer_id', $user->id)->delete();
 
-
-                // if (!empty($order_primary_id)) {
                 Helper::SendNotification($orderid, "Order placed from " . $user->name . "", "checkout_customer", $orderData->id, $user->id);
                 Helper::SendNotification("Hi " . $user->name . "", "Order placed from " . $user->name . "", "checkout_customernoty", $orderData->id, $user->id);
-                // }
-                // Helper::SendNotification($order->order_id,"Order placed from ".$user->name."","checkout_retailer",$order->id,$user->id);
                 Helper::live_notification();
             }
             else {
@@ -630,6 +682,53 @@ class OrderController extends Controller
                     $notifications->type = "orders";
                     $notifications->created_at = now();
                     $notifications->save();
+
+                    // Notify Distributor and Delivery Agents for Reschedule
+                    $order_record = Order::where('id', $request->order_id)->first();
+                    $distributor_ids = [];
+                    if ($order_record && !empty($order_record->assigned_distributor) && $order_record->assigned_distributor != 0) {
+                        $distributor_ids[] = $order_record->assigned_distributor;
+                    } else if ($order_record) {
+                        $zip_code = User_address::where('id', $order_record->selected_address_id)->value('zip_code');
+                        if (!empty($zip_code)) {
+                            $distributor_ids = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
+                                ->where('users.user_type', 'distributor')
+                                ->where('owners_meta_data.pincode', $zip_code)
+                                ->pluck('owners_meta_data.user_id')->all();
+                        }
+                    }
+
+                    if (!empty($distributor_ids)) {
+                        foreach ($distributor_ids as $dist_id) {
+                            // Notify Distributor record
+                            $dist_notifications = new Mobile_notifications;
+                            $dist_notifications->user_id = $dist_id;
+                            $dist_notifications->order_id = $request->order_id;
+                            $dist_notifications->message = "reschedule";
+                            $dist_notifications->type = "orders";
+                            $dist_notifications->created_at = now();
+                            $dist_notifications->save();
+
+                            // Notify all Delivery Agents record
+                            $delivery_agent_ids = Owner_meta_data::where('assigned_distributor', $dist_id)
+                                ->pluck('user_id')
+                                ->all();
+                            
+                            foreach ($delivery_agent_ids as $agent_uid) {
+                                $agent_notifications = new Mobile_notifications;
+                                $agent_notifications->user_id = $agent_uid;
+                                $agent_notifications->order_id = $request->order_id;
+                                $agent_notifications->message = "reschedule";
+                                $agent_notifications->type = "orders";
+                                $agent_notifications->created_at = now();
+                                $agent_notifications->save();
+                            }
+                        }
+                    }
+
+                    // Trigger Push Notification
+                    Helper::SendNotification("Order Rescheduled", "Order ID " . ($order_record->order_id ?? '') . " has been rescheduled by " . $user->name, "checkout_customer", $request->order_id, $user->id);
+                    Helper::live_notification();
                 }
             }
             //send sms to user
@@ -1304,17 +1403,26 @@ class OrderController extends Controller
 
             $user = Auth::user();
 
-            if (!$user || $user->user_type != "distributor") {
+            if (!$user || ($user->user_type != "distributor" && $user->user_type != "delivery_agent")) {
                 return response()->json([
                     'response' => [
                         'statuscode' => 401,
-                        'message' => "Please login as distributor",
+                        'message' => "Please login",
                         'params' => [],
                     ]
                 ], 401);
             }
 
-            $distributor_pincode = Owner_meta_data::where('user_id', $user->id)->value('pincode');
+            // Determine relevant pincode and ID for filtering
+            if ($user->user_type == "delivery_agent") {
+                $pincode_user_id = $user->distributor_id;
+                $effective_distributor_id = $user->distributor_id;
+            } else {
+                $pincode_user_id = $user->id;
+                $effective_distributor_id = $user->id;
+            }
+
+            $distributor_pincode = !empty($pincode_user_id) ? Owner_meta_data::where('user_id', $pincode_user_id)->value('pincode') : null;
 
             $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
                 ->leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
@@ -1326,8 +1434,10 @@ class OrderController extends Controller
                     $status = 'Order placed';
                     
                     // For "Order placed", we match on assigned_distributor OR pincode matching
-                    $order_query->where(function ($query) use ($user, $distributor_pincode) {
-                        $query->where('orders.assigned_distributor', $user->id);
+                    $order_query->where(function ($query) use ($effective_distributor_id, $distributor_pincode) {
+                        if (!empty($effective_distributor_id)) {
+                           $query->where('orders.assigned_distributor', $effective_distributor_id);
+                        }
                         if (!empty($distributor_pincode)) {
                             $query->orWhere('user_addresses.zip_code', $distributor_pincode);
                         }
@@ -1335,31 +1445,33 @@ class OrderController extends Controller
                 }
                 elseif (strtolower($status) == 'on_the_way') {
                     $status = 'On the way';
-                    // For "On the way", match ONLY if this distributor accepted it (checked by assigned_deliveryboy)
-                    $order_query->where(function ($query) use ($user) {
-                        $query->where('orders.assigned_deliveryboy', $user->id)
-                              ->orWhere('orders.assigned_distributor', $user->id);
+                    // For "On the way", match if assigned to this delivery boy OR assigned to their distributor
+                    $order_query->where(function ($query) use ($user, $effective_distributor_id) {
+                        $query->where('orders.assigned_deliveryboy', $user->id);
+                        if ($user->user_type == "distributor") {
+                            $query->orWhere('orders.assigned_distributor', $user->id);
+                        }
                     });
                 }
                 elseif (strtolower($status) == 'delivery' || strtolower($status) == 'delivered') {
                     $status = 'Delivery';
-                    // For "Delivery", match ONLY if this distributor accepted it (checked by assigned_deliveryboy)
-                    $order_query->where(function ($query) use ($user) {
-                        $query->where('orders.assigned_deliveryboy', $user->id)
-                              ->orWhere('orders.assigned_distributor', $user->id);
+                    $order_query->where(function ($query) use ($user, $effective_distributor_id) {
+                        $query->where('orders.assigned_deliveryboy', $user->id);
+                        if ($user->user_type == "distributor") {
+                            $query->orWhere('orders.assigned_distributor', $user->id);
+                        }
                     });
                 }
                 $order_query->where('orders.status', $status);
             } else {
                 // If NO status block is provided, we will return ALL relevant orders:
-                // (Orders in their pincode that are 'Order placed') OR (Orders they have accepted regardless of pincode)
-                $order_query->where(function ($query) use ($user, $distributor_pincode) {
-                    // Match pincode OR assigned distributor purely
-                    $query->where('orders.assigned_distributor', $user->id);
+                $order_query->where(function ($query) use ($user, $effective_distributor_id, $distributor_pincode) {
+                    if (!empty($effective_distributor_id)) {
+                        $query->where('orders.assigned_distributor', $effective_distributor_id);
+                    }
                     if (!empty($distributor_pincode)) {
                         $query->orWhere('user_addresses.zip_code', $distributor_pincode);
                     }
-                    // OR match if they accepted it
                     $query->orWhere('orders.assigned_deliveryboy', $user->id);
                 });
             }
@@ -1421,11 +1533,11 @@ class OrderController extends Controller
         try {
             $user = Auth::user();
 
-            if (!$user || $user->user_type != "distributor") {
+            if (!$user || ($user->user_type != "distributor" && $user->user_type != "delivery_agent")) {
                 return response()->json([
                     'response' => [
                         'statuscode' => 401,
-                        'message' => "Please login as distributor",
+                        'message' => "Please login",
                         'params' => [],
                     ]
                 ], 401);
@@ -1675,34 +1787,52 @@ class OrderController extends Controller
             $user = Auth::user();
             $report_count = collect([]);
             if (!empty($user)) {
-                $distributor_pincode = Owner_meta_data::where('user_id', $user->id)->value('pincode');
+                
+                // Determine relevant pincode and ID for filtering
+                if ($user->user_type == "delivery_agent") {
+                    $pincode_user_id = $user->distributor_id;
+                    $effective_distributor_id = $user->distributor_id;
+                } else {
+                    $pincode_user_id = $user->id;
+                    $effective_distributor_id = $user->id;
+                }
+
+                $distributor_pincode = !empty($pincode_user_id) ? Owner_meta_data::where('user_id', $pincode_user_id)->value('pincode') : null;
                 
                 $order_placed = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
                     ->where('orders.status', 'Order placed')
-                    ->where(function ($query) use ($user, $distributor_pincode) {
-                        $query->where('orders.assigned_distributor', $user->id);
+                    ->where(function ($query) use ($effective_distributor_id, $distributor_pincode) {
+                        if (!empty($effective_distributor_id)) {
+                            $query->where('orders.assigned_distributor', $effective_distributor_id);
+                        }
                         if (!empty($distributor_pincode)) {
                             $query->orWhere('user_addresses.zip_code', $distributor_pincode);
                         }
                     })
                     ->count();
 
-                $on_the_way = Order::where(function ($query) use ($user) {
-                        $query->where('assigned_deliveryboy', $user->id)
-                              ->orWhere('assigned_distributor', $user->id);
+                $on_the_way = Order::where(function ($query) use ($user, $effective_distributor_id) {
+                        $query->where('assigned_deliveryboy', $user->id);
+                        if ($user->user_type == "distributor") {
+                             $query->orWhere('assigned_distributor', $user->id);
+                        }
                     })->where('status', 'On the way')->count();
 
-                // To match "Delivered today", we could check delivery_date or updated_at, but we'll stick to 'Delivery' state entirely for now
-                // Alternatively, add a check for whereDate('orders.updated_at', Carbon::today()) if it absolutely needs to be today.
-                $delivery = Order::where(function ($query) use ($user) {
-                        $query->where('assigned_deliveryboy', $user->id)
-                              ->orWhere('assigned_distributor', $user->id);
+                $delivery = Order::where(function ($query) use ($user, $effective_distributor_id) {
+                        $query->where('assigned_deliveryboy', $user->id);
+                        if ($user->user_type == "distributor") {
+                             $query->orWhere('assigned_distributor', $user->id);
+                        }
                     })->where('status', 'Delivery')->count();
 
-                $cancelled = Order::where(function ($query) use ($user) {
-                        $query->where('assigned_deliveryboy', $user->id)
-                              ->orWhere('assigned_distributor', $user->id);
+                $cancelled = Order::where(function ($query) use ($user, $effective_distributor_id) {
+                        $query->where('assigned_deliveryboy', $user->id);
+                        if ($user->user_type == "distributor") {
+                             $query->orWhere('assigned_distributor', $user->id);
+                        }
                     })->where('status', 'Cancelled')->count();
+
+
 
                 $report_count->put("order_placed", $order_placed);
                 $report_count->put("on_the_way", $on_the_way);
@@ -1792,126 +1922,124 @@ class OrderController extends Controller
 
                 if ($user_table->user_type == "delivery_agent") {
                     $address_table = User_address::select('lat', 'lang')->where('user_id', $user_table->id)->first();
-                    if (!empty($address_table)) {
-                        $lat = $address_table->lat;
-                        $lang = $address_table->lang;
+                    $lat = !empty($address_table) ? $address_table->lat : 0;
+                    $lang = !empty($address_table) ? $address_table->lang : 0;
 
-                        $orderss = Order::join('shipping_address', 'orders.id', '=', 'shipping_address.order_id')->join('user_addresses', 'shipping_address.address_id', '=', 'user_addresses.id')->join('users', 'user_addresses.user_id', '=', 'users.id')->select(
-                            "orders.delivery_time",
-                            "user_addresses.lat as customer_lat",
-                            "user_addresses.lang as customer_lang",
-                            "orders.id as order_id",
-                            "orders.order_id as ord_id",
-                            "users.status as user_status",
-                            "orders.created_at as ord_created_at",
-                            'orders.delivery_date',
-                            "orders.total",
-                            "orders.status as order_status",
-                            'user_addresses.*',
-                            'orders.returnablejar_qty',
-                            'shipping_address.*',
-                            DB::raw("COALESCE(6371 * acos(cos(radians(" . $lat . ")) 
-                        * cos(radians(user_addresses.lat)) 
-                        * cos(radians(user_addresses.lang) 
-                        - radians(" . $lang . ")) 
-                        + sin(radians(" . $lat . ")) 
-                        * sin(radians(user_addresses.lat))),0) AS distance")
-                        )
+                    // Get distributor pincode if the delivery agent is associated with one
+                    $distributor_pincode = null;
+                    if (!empty($user_table->distributor_id)) {
+                        $distributor_pincode = Owner_meta_data::where('user_id', $user_table->distributor_id)->value('pincode');
+                    }
 
-                            ->where('orders.status', $request->status)
-                            ->where('orders.payment_status', 'paid')
-                            ->where('orders.user_type', 'customer');
+                    $order_query = Order::select(
+                        "orders.delivery_time",
+                        "user_addresses.lat as customer_lat",
+                        "user_addresses.lang as customer_lang",
+                        "orders.id as order_id",
+                        "orders.order_id as ord_id",
+                        "orders.created_at as ord_created_at",
+                        "orders.delivery_date",
+                        "orders.total",
+                        "orders.status as order_status",
+                        "user_addresses.full_name",
+                        "user_addresses.address",
+                        "user_addresses.city",
+                        "user_addresses.state",
+                        "user_addresses.zip_code",
+                        "orders.returnablejar_qty",
+                        "orders.customer_id",
+                        DB::raw("COALESCE(6371 * acos(cos(radians(" . $lat . ")) 
+                            * cos(radians(user_addresses.lat)) 
+                            * cos(radians(user_addresses.lang) 
+                            - radians(" . $lang . ")) 
+                            + sin(radians(" . $lat . ")) 
+                            * sin(radians(user_addresses.lat))), 0) AS distance")
+                    )
+                    ->leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.payment_status', 'paid')
+                    ->orderBy('orders.updated_at', 'desc');
 
-                        if ($request->status != "Order placed") {
-                            $orderss->orderBy('orders.updated_at', 'desc');
-                            $orderss->where('orders.assigned_deliveryboy', $user->id);
-                        }
-                        else {
-                            $orderss->orderBy('orders.id', 'desc');
-                        }
-                        $orders = $orderss->get();
-                        $success['statuscode'] = 200;
-                        $success['message'] = "Delivery boy order lists";
-
-                        /**
-                         * params value (product_id,product_qty)
-                         **/
-                        $ord = array();
-
-                        foreach ($orders as $key => $order) {
-
-
-                            $dist = $this->map($lat, $lang, $order->customer_lat, $order->customer_lang);
-                            $kms = str_replace(',', '.', $dist);
-
-
-
-                            $whatIWant = substr($kms, strpos($kms, " ") + 1);
-
-                            if ($whatIWant == "km") {
-
-                                $kms = str_replace('km', '', $kms);
-                            }
-                            else {
-
-                                $kms = str_replace('m', '', $kms);
-                                $kms = $kms / 1000;
-                            }
-
-                            if ((number_format($kms, 2)) <= 5.0) {
-                                $order_products = Orderproducts::where('order_id', $order->order_id)->count();
-                                $order->product_quantity = $order_products;
-                                $order->created_date = $order->delivery_date;
-                                $order->delivery_time = $order->delivery_time;
-                                $order->kms = ($kms);
-
-                                $order->no_of_jars_ordered = 0;
-                                $ordered_products = Orderproducts::select('product_id')->where('order_id', $order->order_id)->get();
-
-                                if ($ordered_products->isNotEmpty()) {
-                                    // Get all product IDs related to the order
-                                    $productIds = $ordered_products->pluck('product_id');
-
-                                    // Check for products of type 'jar'
-                                    $jar_product_ids = Product::whereIn('id', $productIds)
-                                        ->where('type', 'jar')
-                                        ->pluck('id');
-
-                                    if ($jar_product_ids->isNotEmpty()) {
-                                        // Sum quantities only for products that are 'jar'
-                                        $order->no_of_jars_ordered = Orderproducts::where('order_id', $order->order_id)
-                                            ->whereIn('product_id', $jar_product_ids)
-                                            ->sum('quantity');
+                    if ($request->filled('status')) {
+                        $status = str_replace('"', '', $request->status);
+                        if (strtolower($status) == 'order_placed') {
+                            $status = 'Order placed';
+                            // Visible if assigned to their distributor OR in their distributor's pincode
+                            $order_query->where(function ($query) use ($user_table, $distributor_pincode) {
+                                if (!empty($user_table->distributor_id)) {
+                                    $query->where('orders.assigned_distributor', $user_table->distributor_id);
+                                    if (!empty($distributor_pincode)) {
+                                        $query->orWhere('user_addresses.zip_code', $distributor_pincode);
                                     }
+                                } else {
+                                    // If no distributor assigned to agent, maybe show all (or keep previous distance logic)
+                                    // For now, we follow the distributor logic pattern
                                 }
-
-                                // Sum all no_of_jars_returned instead of fetching the first one
-                                $order->no_of_jars_returned = Orderproducts::where('order_id', $order->order_id)->sum('no_of_jars_returned');
-
-                                array_push($ord, $order);
-                            }
-                            else {
-
-                                unset($orders[$key]);
-                            }
+                            });
+                        } elseif (strtolower($status) == 'on_the_way') {
+                            $status = 'On the way';
+                            $order_query->where('orders.assigned_deliveryboy', $user->id);
+                        } elseif (strtolower($status) == 'delivery' || strtolower($status) == 'delivered') {
+                            $status = 'Delivery';
+                            $order_query->where('orders.assigned_deliveryboy', $user->id);
                         }
-                        $params['lat'] = $lat;
-                        $params['lang'] = $lang;
+                        $order_query->where('orders.status', $status);
+                    }
 
-                        $success['orders'] = $ord;
-                        $success['params'] = $params;
-                        $response['response'] = $success;
-                        return response()->json($response, 200);
+                    $orders = $order_query->get();
+
+                    $url = url('/');
+                    $ord = [];
+
+                    foreach ($orders as $order) {
+                        $kms = (float)$order->distance;
+                        
+                        // We keep the <= 5.0km check if it's "Order placed" (optional, but keep it for safety if that's the business rule)
+                        // If it's already assigned to them, they should see it regardless of current distance
+                        if ($order->order_status != "Order placed" || $kms <= 5.0) {
+                            $order_products_count = Orderproducts::where('order_id', $order->order_id)->count();
+                            $order->product_quantity = $order_products_count;
+                            $order->created_date = $order->delivery_date;
+                            $order->kms = $kms;
+
+                            // Fetch products list for the response (added to match distributor API style)
+                            $order_products = Orderproducts::where('order_id', $order->order_id)->get();
+                            $products_list = [];
+                            foreach ($order_products as $op) {
+                                $product = Product::select('id', 'name', 'image', 'type')->where('id', $op->product_id)->first();
+                                $products_list[] = [
+                                    'product_img' => $url . '/' . (!empty($product) ? $product->image : ''),
+                                    'product_name' => $product ? $product->name : 'Unknown Product',
+                                    'product_qty' => $op->quantity,
+                                    'amount' => $op->amount
+                                ];
+                            }
+                            $order->products = $products_list;
+
+                            // Jar tracking
+                            $order->no_of_jars_ordered = 0;
+                            $jar_product_ids = Product::whereIn('id', collect($products_list)->pluck('id'))->where('type', 'jar')->pluck('id');
+                            if ($jar_product_ids->isNotEmpty()) {
+                                $order->no_of_jars_ordered = Orderproducts::where('order_id', $order->order_id)
+                                    ->whereIn('product_id', $jar_product_ids)
+                                    ->sum('quantity');
+                            }
+                            $order->no_of_jars_returned = Orderproducts::where('order_id', $order->order_id)->sum('no_of_jars_returned');
+
+                            $ord[] = $order;
+                        }
                     }
-                    else {
-                        $success['statuscode'] = 401;
-                        $success['message'] = "Address list empty";
-                        $params = [];
-                        $success['params'] = $params;
-                        $response['response'] = $success;
-                        return response()->json($response, 401);
-                    }
+
+                    return response()->json([
+                        'response' => [
+                            'statuscode' => 200,
+                            'message' => "Delivery boy order lists",
+                            'params' => ['lat' => $lat, 'lang' => $lang, 'count' => count($ord)],
+                            'orders' => $ord,
+                        ]
+                    ], 200);
                 }
+
+
                 else if ($user_table->user_type == "distributor") {
 
                     $user_status = $user->user_status;
@@ -2251,8 +2379,55 @@ class OrderController extends Controller
 
                                     Helper::SendNotification("Order status", "Your Order status changed successfully", "adminorder_status", $request->order_id, $check_status->customer_id);
                                 }
-                                $available_jar = $check_status->returnablejar_qty;
-                                // $no_of_jars_ordered = Orderproducts::where('order_id', $check_status->id)->sum('quantity');
+
+                                // Update returnable jar count for customer address
+                                $c_no_of_ordered = 0;
+                                $c_no_of_jars_returned = 0;
+                                $selected_address_id = $check_status->selected_address_id;
+
+                                $order_products_recalc = OrderProducts::where('customer_id', $check_status->customer_id)->get();
+
+                                foreach ($order_products_recalc as $p) {
+                                    $delivered_order = Order::where('id', $p->order_id)
+                                        ->where('status', 'Delivery')
+                                        ->where('selected_address_id', $selected_address_id)
+                                        ->first();
+
+                                    if (!empty($delivered_order)) {
+                                        $product = Product::where('id', $p->product_id)->first();
+                                        if (!empty($product) && $product->type == "jar") {
+                                            $c_no_of_ordered += $p->quantity;
+                                            $c_no_of_jars_returned += $p->no_of_jars_returned;
+                                        }
+                                    }
+                                }
+
+                                // Update User_address table
+                                User_address::where('id', $selected_address_id)->update([
+                                    'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+                                ]);
+                                
+                                // Sync legacy User table column
+                                User::where('id', $check_status->customer_id)->update([
+                                    'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+                                ]);
+
+                                // Sync current Order's returnablejar_qty for app response
+                                Order::where('id', $request->order_id)->update([
+                                    'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+                                ]);
+
+                                // Update inventory if status changed to Delivery
+                                if ($request->status == "Delivery" && $check_status->status != "Delivery") {
+                                    foreach ($order_details as $order_detail) {
+                                        $product = Product::find($order_detail->product_id);
+                                        if ($product) {
+                                            $product->update(['quantity_per_case' => $product->quantity_per_case - $order_detail->quantity]);
+                                        }
+                                    }
+                                }
+
+                                $available_jar = $c_no_of_ordered - $c_no_of_jars_returned;
 
                                 $success['statuscode'] = 200;
                                 $success['message'] = "Status changed successfully";
@@ -2629,6 +2804,9 @@ class OrderController extends Controller
         try {
             $orders = array();
             if (!empty($user)) {
+                $user_meta = Owner_meta_data::where('user_id', $user->id)->first();
+                $user_pincode = $user_meta ? $user_meta->pincode : null;
+
                 $notifications = Mobile_notifications::where('user_id', $user->id)->orderBy('id', 'desc')->whereRaw('NOT FIND_IN_SET(' . $user->id . ',removed_user)')->get();
 
                 $delivery_distributor_notification = Mobile_notifications::orderBy('id', 'desc')->whereRaw('NOT FIND_IN_SET(' . $user->id . ',removed_user)')->groupBy('order_id')->get();
@@ -2637,14 +2815,23 @@ class OrderController extends Controller
 
 
                     foreach ($notifications as $notification) {
-                        $order = Order::where('id', $notification->order_id)->first();
+                        $order = Order::join('users', 'users.id', '=', 'orders.customer_id')
+                            ->select('orders.id', 'orders.created_at', 'orders.order_id', 'orders.status', 'users.name as customer_name')
+                            ->where('orders.id', $notification->order_id)
+                            ->first();
+
                         if (!empty($order)) {
                             $msg_replace = str_replace(" ", "_", $notification->message);
                             if (strtolower($msg_replace) == "order_placed") {
-                                $msg = "Your " . $order->order_id . " order has been placed";
+                                // Show different message based on who is viewing
+                                if ($user->user_type == 'delivery_agent' || $user->user_type == 'distributor') {
+                                    $msg = "New order " . $order->order_id . " placed by " . $order->customer_name;
+                                } else {
+                                    $msg = "Your " . $order->order_id . " order has been placed";
+                                }
                             }
                             else if (strtolower($msg_replace) == "on_the_way") {
-                                $msg = "Your " . $order->order_id . " order has been accepted,your item is on the way";
+                                $msg = "Your " . $order->order_id . " order has been accepted, your item is on the way";
                             }
                             else if (strtolower($msg_replace) == "delivery") {
                                 $msg = "Your " . $order->order_id . " order has been delivered";
@@ -2653,7 +2840,10 @@ class OrderController extends Controller
                                 $msg = "Your " . $order->order_id . " order has been cancelled";
                             }
                             else if (strtolower($msg_replace) == "reschedule") {
-                                $msg = "Your " . $order->order_id . " order has been reschedule";
+                                $msg = "Your " . $order->order_id . " order has been rescheduled";
+                            }
+                            else {
+                                $msg = $notification->message;
                             }
                         }
                         else {
@@ -2661,22 +2851,19 @@ class OrderController extends Controller
                         }
 
                         if (!empty($notification->order_id)) {
-
-                            $order = Order::select('id', 'created_at', 'order_id', 'status')->where('id', $notification->order_id)->orderBy('id', 'desc')->first();
+                            $order = Order::select('id', 'created_at', 'order_id', 'status')
+                                ->where('id', $notification->order_id)
+                                ->orderBy('id', 'desc')
+                                ->first();
 
                             $ord['id'] = $notification->id;
                             $ord['ord_id'] = (!empty($order) ? $order->id : '');
                             $ord['order_id'] = (!empty($order) ? $order->order_id : '');
-                            if (!(empty($order)) && $order->status == "Delivery") {
-                                $order->o_status = "Delivered";
+                            if (!empty($order) && $order->status == "Delivery") {
+                                $ord['title'] = "Delivered";
+                            } else {
+                                $ord['title'] = (!empty($order) ? $order->status : '');
                             }
-                            else {
-                                if (!(empty($order))) {
-                                    $order->o_status = (!empty($order) ? $order->status : '');
-                                }
-                            // $order->o_status=(!empty($order)?$order->status:'');
-                            }
-                            $ord['title'] = (!empty($order) ? $order->o_status : '');
                             $ord['msg'] = $msg;
                             $ord['date'] = (!empty($order) ? $order->created_at->format('Y-m-d') : '');
                             $ord['time'] = (!empty($order) ? $order->created_at->format('g:i a') : '');
@@ -2701,7 +2888,7 @@ class OrderController extends Controller
                                     $lang = "";
                                 }
                                 if (!empty($lat) && !empty($lang)) {
-                                    $order = Order::join('shipping_address', 'orders.id', '=', 'shipping_address.order_id')->join('user_addresses', 'shipping_address.address_id', '=', 'user_addresses.id')->select(
+                                    $order_query = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')->select(
                                         "orders.id",
                                         "orders.order_id as ord_id",
                                         "user_addresses.lat as customer_lat",
@@ -2711,30 +2898,63 @@ class OrderController extends Controller
                                         "orders.total",
                                         "orders.status as order_status",
                                         'user_addresses.*',
-                                        'shipping_address.*',
                                         DB::raw("COALESCE(6371 * acos(cos(radians(" . $lat . ")) 
                                         * cos(radians(user_addresses.lat)) 
                                         * cos(radians(user_addresses.lang) 
                                         - radians(" . $lang . ")) 
                                         + sin(radians(" . $lat . ")) 
                                         * sin(radians(user_addresses.lat))),0) AS distance")
-                                    )->where('orders.user_type', 'customer')->where('orders.status', 'Order placed')->where('orders.id', $notification->order_id)->orderBy('orders.id', 'desc')->first();
+                                    )->where('orders.user_type', 'customer')->where('orders.status', 'Order placed')->where('orders.id', $notification->order_id);
+                                    
+                                    if (!empty($user_pincode)) {
+                                        $order_query->where(function($q) use ($user_pincode, $user) {
+                                            $q->where('orders.assigned_distributor', $user->id)
+                                              ->orWhere('orders.assigned_distributor', 0)
+                                              ->where('user_addresses.zip_code', $user_pincode);
+                                        });
+                                    }
+                                    
+                                    $order = $order_query->orderBy('orders.id', 'desc')->first();
                                 }
                                 else {
-                                    $order = [];
+                                    $order_query = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')->select(
+                                        "orders.id",
+                                        "orders.order_id as ord_id",
+                                        "user_addresses.lat as customer_lat",
+                                        "user_addresses.lang as customer_lang",
+                                        "orders.id as o_id",
+                                        "orders.created_at as ord_created_at",
+                                        "orders.total",
+                                        "orders.status as order_status",
+                                        'user_addresses.*'
+                                    )->where('orders.user_type', 'customer')->where('orders.status', 'Order placed')->where('orders.id', $notification->order_id);
+
+                                    if (!empty($user_pincode)) {
+                                        $order_query->where(function($q) use ($user_pincode, $user) {
+                                            $q->where('orders.assigned_distributor', $user->id)
+                                              ->orWhere('orders.assigned_distributor', 0)
+                                              ->where('user_addresses.zip_code', $user_pincode);
+                                        });
+                                    }
+                                    
+                                    $order = $order_query->orderBy('orders.id', 'desc')->first();
                                 }
 
                                 if (!empty($order)) {
 
-                                    $dist = $this->map($lat, $lang, $order->customer_lat, $order->customer_lang);
-                                    $kms = str_replace(',', '.', $dist);
-                                    $whatIWant = substr($kms, strpos($kms, " ") + 1);
-                                    if ($whatIWant == "km") {
-                                        $kms = str_replace('km', '', $kms);
-                                    }
-                                    else {
-                                        $kms = str_replace('m', '', $kms);
-                                        $kms = $kms / 1000;
+                                    if (!empty($lat) && !empty($lang)) {
+                                        $dist = $this->map($lat, $lang, $order->customer_lat, $order->customer_lang);
+                                        $kms = str_replace(',', '.', $dist);
+                                        $whatIWant = substr($kms, strpos($kms, " ") + 1);
+                                        if ($whatIWant == "km") {
+                                            $kms = str_replace('km', '', $kms);
+                                        }
+                                        else {
+                                            $kms = str_replace('m', '', $kms);
+                                            $kms = $kms / 1000;
+                                        }
+                                    } else {
+                                        $kms = 0; // Show by default if agent has no location set
                                     }
 
 
@@ -2774,10 +2994,32 @@ class OrderController extends Controller
                         if ($user->user_type == "distributor") {
                             if (!empty($notification->order_id)) {
 
-                                $order = Order::
-                                    // ->join('user_addresses','shipping_address.address_id','=','user_addresses.id')
-                                    join('shipping_address', 'orders.id', '=', 'shipping_address.order_id')->join('owners_meta_data', 'owners_meta_data.user_id', '=', 'orders.customer_id')
-                                    ->select("orders.id", "orders.order_id as ord_id", "orders.assigned_distributor", "orders.created_at as ord_created_at", "orders.id as o_id", "orders.total", "orders.status as order_status", 'shipping_address.*', "owners_meta_data.name_of_owner as full_name")->where('owners_meta_data.assigned_distributor', $user->id)->where('orders.status', "Order placed")->where('orders.id', $notification->order_id)->orderBy('orders.id', 'desc')->first();
+                                $order_query = Order::join('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                                    ->join('users', 'users.id', '=', 'orders.customer_id')
+                                    ->select(
+                                        "orders.id", 
+                                        "orders.order_id as ord_id", 
+                                        "orders.assigned_distributor", 
+                                        "orders.created_at as ord_created_at", 
+                                        "orders.id as o_id", 
+                                        "orders.total", 
+                                        "orders.status as order_status", 
+                                        "users.name as full_name"
+                                    )
+                                    ->where('orders.status', "Order placed")
+                                    ->where('orders.id', $notification->order_id);
+
+                                if (!empty($user_pincode)) {
+                                    $order_query->where(function($q) use ($user_pincode, $user) {
+                                        $q->where('orders.assigned_distributor', $user->id)
+                                          ->orWhere('orders.assigned_distributor', 0)
+                                          ->where('user_addresses.zip_code', $user_pincode);
+                                    });
+                                } else {
+                                    $order_query->where('orders.assigned_distributor', $user->id);
+                                }
+
+                                $order = $order_query->orderBy('orders.id', 'desc')->first();
 
 
                                 if (!empty($order)) {

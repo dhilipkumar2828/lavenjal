@@ -199,18 +199,24 @@ class CartController extends Controller
     {
         try {
             $user = Auth::user();
-            $carts = Carts::where('status', 'active')->where('customer_id', $user->id)->get();
-
-
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
+            $delivery_charge_value = '0.00';
+
             if (!empty($user_address)) {
-                $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
-            }
-            else {
-                $charges = [];
+                // If there IS a lift (is_lift is true or 1), check for floors above the 1st floor
+                if ($user_address->is_lift == 'true' || $user_address->is_lift == '1') {
+                    if ($user_address->floor_no > 1) {
+                        $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
+                        $delivery_charge_value = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+                    }
+                }
             }
 
-            Carts::where('customer_id', $user->id)->update(['delivery_charges' => ((!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00')]);
+            // Update database first
+            Carts::where('customer_id', $user->id)->update(['delivery_charges' => $delivery_charge_value]);
+
+            // Now fetch the updated carts for the response
+            $carts = Carts::where('status', 'active')->where('customer_id', $user->id)->get();
 
             $order_count = Order::where('customer_id', $user->id)->count();
             $is_jar_available = false;
