@@ -2844,6 +2844,7 @@ class OrderController extends Controller
 
     public function notifications(Request $request)
     {
+        date_default_timezone_set("Asia/Kolkata");
         $user = Auth::user();
 
         try {
