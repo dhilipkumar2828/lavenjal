@@ -1807,51 +1807,85 @@ class OrderController extends Controller
             $report_count = collect([]);
             if (!empty($user)) {
                 
-                // Determine relevant pincode and ID for filtering
-                if ($user->user_type == "delivery_agent") {
-                    $pincode_user_id = $user->distributor_id;
-                    $effective_distributor_id = $user->distributor_id;
-                } else {
-                    $pincode_user_id = $user->id;
-                    $effective_distributor_id = $user->id;
-                }
+                $user_meta = Owner_meta_data::where('user_id', $user->id)->first();
+                $user_pincode = $user_meta ? $user_meta->pincode : null;
 
-                $distributor_pincode = !empty($pincode_user_id) ? Owner_meta_data::where('user_id', $pincode_user_id)->value('pincode') : null;
+                // ORDER PLACED
+                $order_placed_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.status', 'Order placed');
                 
-                $order_placed = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
-                    ->where('orders.status', 'Order placed')
-                    ->where(function ($query) use ($effective_distributor_id, $distributor_pincode) {
-                        if (!empty($effective_distributor_id)) {
-                            $query->where('orders.assigned_distributor', $effective_distributor_id);
+                if ($user->user_type == "delivery_agent") {
+                    if (!empty($user_pincode)) {
+                        $order_placed_query->where('user_addresses.zip_code', $user_pincode);
+                    } else {
+                        $order_placed_query->whereRaw('1 = 0');
+                    }
+                } else {
+                    $order_placed_query->where(function ($query) use ($user, $user_pincode) {
+                        $query->where('orders.assigned_distributor', $user->id);
+                        if (!empty($user_pincode)) {
+                            $query->orWhere('user_addresses.zip_code', $user_pincode);
                         }
-                        if (!empty($distributor_pincode)) {
-                            $query->orWhere('user_addresses.zip_code', $distributor_pincode);
-                        }
-                    })
-                    ->count();
+                    });
+                }
+                $order_placed = $order_placed_query->count();
 
-                $on_the_way = Order::where(function ($query) use ($user, $effective_distributor_id) {
-                        $query->where('assigned_deliveryboy', $user->id);
-                        if ($user->user_type == "distributor") {
-                             $query->orWhere('assigned_distributor', $user->id);
-                        }
-                    })->where('status', 'On the way')->count();
+                // ON THE WAY
+                $on_the_way_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.status', 'On the way');
+                
+                if ($user->user_type == "delivery_agent") {
+                    $on_the_way_query->where('orders.assigned_deliveryboy', $user->id);
+                    if (!empty($user_pincode)) {
+                        $on_the_way_query->where('user_addresses.zip_code', $user_pincode);
+                    } else {
+                        $on_the_way_query->whereRaw('1 = 0');
+                    }
+                } else {
+                    $on_the_way_query->where(function ($query) use ($user) {
+                        $query->where('orders.assigned_deliveryboy', $user->id)
+                              ->orWhere('orders.assigned_distributor', $user->id);
+                    });
+                }
+                $on_the_way = $on_the_way_query->count();
 
-                $delivery = Order::where(function ($query) use ($user, $effective_distributor_id) {
-                        $query->where('assigned_deliveryboy', $user->id);
-                        if ($user->user_type == "distributor") {
-                             $query->orWhere('assigned_distributor', $user->id);
-                        }
-                    })->where('status', 'Delivery')->count();
+                // DELIVERY
+                $delivery_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.status', 'Delivery');
+                
+                if ($user->user_type == "delivery_agent") {
+                    $delivery_query->where('orders.assigned_deliveryboy', $user->id);
+                    if (!empty($user_pincode)) {
+                        $delivery_query->where('user_addresses.zip_code', $user_pincode);
+                    } else {
+                        $delivery_query->whereRaw('1 = 0');
+                    }
+                } else {
+                    $delivery_query->where(function ($query) use ($user) {
+                        $query->where('orders.assigned_deliveryboy', $user->id)
+                              ->orWhere('orders.assigned_distributor', $user->id);
+                    });
+                }
+                $delivery = $delivery_query->count();
 
-                $cancelled = Order::where(function ($query) use ($user, $effective_distributor_id) {
-                        $query->where('assigned_deliveryboy', $user->id);
-                        if ($user->user_type == "distributor") {
-                             $query->orWhere('assigned_distributor', $user->id);
-                        }
-                    })->where('status', 'Cancelled')->count();
-
-
+                // CANCELLED
+                $cancelled_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.status', 'Cancelled');
+                
+                if ($user->user_type == "delivery_agent") {
+                    $cancelled_query->where('orders.assigned_deliveryboy', $user->id);
+                    if (!empty($user_pincode)) {
+                        $cancelled_query->where('user_addresses.zip_code', $user_pincode);
+                    } else {
+                        $cancelled_query->whereRaw('1 = 0');
+                    }
+                } else {
+                    $cancelled_query->where(function ($query) use ($user) {
+                        $query->where('orders.assigned_deliveryboy', $user->id)
+                              ->orWhere('orders.assigned_distributor', $user->id);
+                    });
+                }
+                $cancelled = $cancelled_query->count();
 
                 $report_count->put("order_placed", $order_placed);
                 $report_count->put("on_the_way", $on_the_way);
