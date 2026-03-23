@@ -1418,6 +1418,7 @@ class OrderController extends Controller
 
             $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
                 ->leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                ->where('orders.payment_status', 'paid')
                 ->orderBy('orders.updated_at', 'desc');
 
             if ($user->user_type == "delivery_agent") {
@@ -1425,13 +1426,14 @@ class OrderController extends Controller
                     $effective_distributor_id = $user_meta->assigned_distributor;
                 }
                 
-                // For delivery agents, apply the mandatory pincode filter using THEIR own metadata pincode
+                // For delivery agents, allow orders in their pincode OR orders assigned to them
                 $agent_pincode = $user_meta ? $user_meta->pincode : null;
-                if (!empty($agent_pincode)) {
-                    $order_query->where('user_addresses.zip_code', $agent_pincode);
-                } else {
-                    $order_query->whereRaw('1 = 0'); // No pincode, no access (safety)
-                }
+                $order_query->where(function ($query) use ($agent_pincode, $user) {
+                    if (!empty($agent_pincode)) {
+                        $query->where('user_addresses.zip_code', $agent_pincode);
+                    }
+                    $query->orWhere('orders.assigned_deliveryboy', $user->id);
+                });
             } else {
                 // For distributors, we'll use their pincode in the status block if necessary
                 $distributor_pincode = $user_meta ? $user_meta->pincode : null;
@@ -1564,6 +1566,7 @@ class OrderController extends Controller
 
             $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
                 ->where('orders.assigned_deliveryboy', $user->id)
+                ->where('orders.payment_status', 'paid')
                 ->orderBy('orders.updated_at', 'desc');
 
             if ($request->filled('status')) {
@@ -1812,14 +1815,16 @@ class OrderController extends Controller
 
                 // ORDER PLACED
                 $order_placed_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.payment_status', 'paid')
                     ->where('orders.status', 'Order placed');
                 
                 if ($user->user_type == "delivery_agent") {
-                    if (!empty($user_pincode)) {
-                        $order_placed_query->where('user_addresses.zip_code', $user_pincode);
-                    } else {
-                        $order_placed_query->whereRaw('1 = 0');
-                    }
+                    $order_placed_query->where(function ($query) use ($user, $user_pincode) {
+                        if (!empty($user_pincode)) {
+                            $query->where('user_addresses.zip_code', $user_pincode);
+                        }
+                        $query->orWhere('orders.assigned_deliveryboy', $user->id);
+                    });
                 } else {
                     $order_placed_query->where(function ($query) use ($user, $user_pincode) {
                         $query->where('orders.assigned_distributor', $user->id);
@@ -1832,15 +1837,11 @@ class OrderController extends Controller
 
                 // ON THE WAY
                 $on_the_way_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.payment_status', 'paid')
                     ->where('orders.status', 'On the way');
                 
                 if ($user->user_type == "delivery_agent") {
                     $on_the_way_query->where('orders.assigned_deliveryboy', $user->id);
-                    if (!empty($user_pincode)) {
-                        $on_the_way_query->where('user_addresses.zip_code', $user_pincode);
-                    } else {
-                        $on_the_way_query->whereRaw('1 = 0');
-                    }
                 } else {
                     $on_the_way_query->where(function ($query) use ($user) {
                         $query->where('orders.assigned_deliveryboy', $user->id)
@@ -1851,15 +1852,11 @@ class OrderController extends Controller
 
                 // DELIVERY
                 $delivery_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.payment_status', 'paid')
                     ->where('orders.status', 'Delivery');
                 
                 if ($user->user_type == "delivery_agent") {
                     $delivery_query->where('orders.assigned_deliveryboy', $user->id);
-                    if (!empty($user_pincode)) {
-                        $delivery_query->where('user_addresses.zip_code', $user_pincode);
-                    } else {
-                        $delivery_query->whereRaw('1 = 0');
-                    }
                 } else {
                     $delivery_query->where(function ($query) use ($user) {
                         $query->where('orders.assigned_deliveryboy', $user->id)
@@ -1870,15 +1867,11 @@ class OrderController extends Controller
 
                 // CANCELLED
                 $cancelled_query = Order::leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
+                    ->where('orders.payment_status', 'paid')
                     ->where('orders.status', 'Cancelled');
                 
                 if ($user->user_type == "delivery_agent") {
                     $cancelled_query->where('orders.assigned_deliveryboy', $user->id);
-                    if (!empty($user_pincode)) {
-                        $cancelled_query->where('user_addresses.zip_code', $user_pincode);
-                    } else {
-                        $cancelled_query->whereRaw('1 = 0');
-                    }
                 } else {
                     $cancelled_query->where(function ($query) use ($user) {
                         $query->where('orders.assigned_deliveryboy', $user->id)
