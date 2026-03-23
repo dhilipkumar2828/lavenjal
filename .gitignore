@@ -2,7 +2,6 @@
 /public/backend
 /public/storage
 # /storage/*.key
-# /storage/app/firebase
 /vendor
 # .env
 .env.backup
