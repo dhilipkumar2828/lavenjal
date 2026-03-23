@@ -341,10 +341,14 @@ class Helper
 
             $result = curl_exec($ch);
             if ($result === FALSE) {
-                $results[] = ['error' => 'Curl failed: ' . curl_error($ch)];
+                $err = curl_error($ch);
+                \Log::error("FCM Send Curl Failed: " . $err);
+                $results[] = ['error' => 'Curl failed: ' . $err];
             }
             else {
-                $results[] = json_decode($result, true);
+                $decoded = json_decode($result, true);
+                \Log::info("FCM Send Response (Project: $fcmProjectId, Token: " . substr($token, 0, 10) . "...): ", (is_array($decoded) ? $decoded : ["raw" => $result]));
+                $results[] = $decoded;
             }
             curl_close($ch);
         }
@@ -362,7 +366,8 @@ class Helper
 
     public static function notification_timing($date)
     {
-        $seconds = strtotime(date('Y-m-d H:i:s')) - strtotime($date);
+        date_default_timezone_set("Asia/Kolkata");
+        $seconds = time() - strtotime($date);
 
         $months = floor($seconds / (3600 * 24 * 30));
         $day = floor($seconds / (3600 * 24));
