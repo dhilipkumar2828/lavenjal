@@ -1413,35 +1413,45 @@ class OrderController extends Controller
                 ], 401);
             }
 
-            // Determine relevant pincode and ID for filtering
-            if ($user->user_type == "delivery_agent") {
-                $pincode_user_id = $user->distributor_id;
-                $effective_distributor_id = $user->distributor_id;
-            } else {
-                $pincode_user_id = $user->id;
-                $effective_distributor_id = $user->id;
-            }
-
-            $distributor_pincode = !empty($pincode_user_id) ? Owner_meta_data::where('user_id', $pincode_user_id)->value('pincode') : null;
+            $user_meta = Owner_meta_data::where('user_id', $user->id)->first();
+            $effective_distributor_id = $user->id;
 
             $order_query = Order::select('orders.order_id', 'orders.total', 'orders.created_at', 'orders.status', 'orders.id', 'orders.customer_id', 'orders.delivery_date', 'orders.delivery_time')
                 ->leftJoin('user_addresses', 'orders.selected_address_id', '=', 'user_addresses.id')
                 ->orderBy('orders.updated_at', 'desc');
+
+            if ($user->user_type == "delivery_agent") {
+                if ($user_meta && !empty($user_meta->assigned_distributor)) {
+                    $effective_distributor_id = $user_meta->assigned_distributor;
+                }
+                
+                // For delivery agents, apply the mandatory pincode filter using THEIR own metadata pincode
+                $agent_pincode = $user_meta ? $user_meta->pincode : null;
+                if (!empty($agent_pincode)) {
+                    $order_query->where('user_addresses.zip_code', $agent_pincode);
+                } else {
+                    $order_query->whereRaw('1 = 0'); // No pincode, no access (safety)
+                }
+            } else {
+                // For distributors, we'll use their pincode in the status block if necessary
+                $distributor_pincode = $user_meta ? $user_meta->pincode : null;
+            }
 
             if ($request->filled('status')) {
                 $status = str_replace('"', '', $request->status); // Remove quotes if passed
                 if (strtolower($status) == 'order_placed') {
                     $status = 'Order placed';
                     
-                    // For "Order placed", we match on assigned_distributor OR pincode matching
-                    $order_query->where(function ($query) use ($effective_distributor_id, $distributor_pincode) {
-                        if (!empty($effective_distributor_id)) {
-                           $query->where('orders.assigned_distributor', $effective_distributor_id);
-                        }
-                        if (!empty($distributor_pincode)) {
-                            $query->orWhere('user_addresses.zip_code', $distributor_pincode);
-                        }
-                    });
+                    // For distributors, maintain the original behavior: show assigned OR same pincode
+                    if ($user->user_type == "distributor") {
+                        $order_query->where(function ($query) use ($user, $distributor_pincode) {
+                            $query->where('orders.assigned_distributor', $user->id);
+                            if (!empty($distributor_pincode)) {
+                                $query->orWhere('user_addresses.zip_code', $distributor_pincode);
+                            }
+                        });
+                    }
+                    // For agents, the global filter already enforced the pincode.
                 }
                 elseif (strtolower($status) == 'on_the_way') {
                     $status = 'On the way';
@@ -1464,16 +1474,25 @@ class OrderController extends Controller
                 }
                 $order_query->where('orders.status', $status);
             } else {
-                // If NO status block is provided, we will return ALL relevant orders:
-                $order_query->where(function ($query) use ($user, $effective_distributor_id, $distributor_pincode) {
-                    if (!empty($effective_distributor_id)) {
-                        $query->where('orders.assigned_distributor', $effective_distributor_id);
-                    }
-                    if (!empty($distributor_pincode)) {
-                        $query->orWhere('user_addresses.zip_code', $distributor_pincode);
-                    }
-                    $query->orWhere('orders.assigned_deliveryboy', $user->id);
-                });
+                // If NO status block is provided:
+                if ($user->user_type == "delivery_agent") {
+                    // Global pincode filter already applies. Just check assignments.
+                    $order_query->where(function ($query) use ($user, $effective_distributor_id) {
+                        if (!empty($effective_distributor_id)) {
+                            $query->where('orders.assigned_distributor', $effective_distributor_id);
+                        }
+                        $query->orWhere('orders.assigned_deliveryboy', $user->id);
+                    });
+                } else {
+                    // Distributor: Broad matching (assigned OR area OR assigned deliveryboy)
+                    $order_query->where(function ($query) use ($user, $distributor_pincode) {
+                        $query->where('orders.assigned_distributor', $user->id);
+                        if (!empty($distributor_pincode)) {
+                            $query->orWhere('user_addresses.zip_code', $distributor_pincode);
+                        }
+                        $query->orWhere('orders.assigned_deliveryboy', $user->id);
+                    });
+                }
             }
 
             if ($request->filled('count')) {
@@ -1927,8 +1946,13 @@ class OrderController extends Controller
 
                     // Get distributor pincode if the delivery agent is associated with one
                     $distributor_pincode = null;
-                    if (!empty($user_table->distributor_id)) {
-                        $distributor_pincode = Owner_meta_data::where('user_id', $user_table->distributor_id)->value('pincode');
+                    if (!empty($owner_meta_data->assigned_distributor)) {
+                        $distributor_pincode = Owner_meta_data::where('user_id', $owner_meta_data->assigned_distributor)->value('pincode');
+                    }
+                    
+                    // Fallback to their own pincode if master has none
+                    if (empty($distributor_pincode)) {
+                        $distributor_pincode = $owner_meta_data->pincode;
                     }
 
                     $order_query = Order::select(
@@ -1963,18 +1987,12 @@ class OrderController extends Controller
                         $status = str_replace('"', '', $request->status);
                         if (strtolower($status) == 'order_placed') {
                             $status = 'Order placed';
-                            // Visible if assigned to their distributor OR in their distributor's pincode
-                            $order_query->where(function ($query) use ($user_table, $distributor_pincode) {
-                                if (!empty($user_table->distributor_id)) {
-                                    $query->where('orders.assigned_distributor', $user_table->distributor_id);
-                                    if (!empty($distributor_pincode)) {
-                                        $query->orWhere('user_addresses.zip_code', $distributor_pincode);
-                                    }
-                                } else {
-                                    // If no distributor assigned to agent, maybe show all (or keep previous distance logic)
-                                    // For now, we follow the distributor logic pattern
-                                }
-                            });
+                            // Enforce mandatory pincode match
+                            if (!empty($distributor_pincode)) {
+                                $order_query->where('user_addresses.zip_code', $distributor_pincode);
+                            } else {
+                                $order_query->whereRaw('1 = 0');
+                            }
                         } elseif (strtolower($status) == 'on_the_way') {
                             $status = 'On the way';
                             $order_query->where('orders.assigned_deliveryboy', $user->id);
