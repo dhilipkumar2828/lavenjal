@@ -14,6 +14,8 @@ use Session;
 use App\Models\Orderproducts;
 use App\Models\Owner_meta_data;
 use App\Models\Sales_rep;
+use App\helpers\Helper;
+use Carbon\Carbon;
 class OrdersController extends Controller
 {
     /**
@@ -267,31 +269,98 @@ class OrdersController extends Controller
             'status' => 'required',
         ]);
 
-        Order::where('id', $request->order_id)->update(['status' => $request->status]);
+        $order_id = $request->order_id;
+        $order = Order::find($order_id);
+        if (!$order) {
+            Session::flash('error', 'Order not found');
+            return redirect()->back();
+        }
 
+        // Prepare status update data
+        $update_data = ['status' => $request->status];
+        
+        $delivered_date = $order->O_delivery_date;
+        $delivered_time = $order->O_delivery_time;
+        $on_the_waydate = $order->on_the_way_date;
+        $cancelled_date = $order->cancelled_date;
 
-        $check_status = Order::where('id', $request->order_id)->first();
+        if ($request->status == "Delivery") {
+            $delivered_date = date("Y-m-d");
+            $delivered_time = date("h:i:sa");
+        } else if ($request->status == "On the way") {
+            $on_the_waydate = date("Y-m-d");
+        } else if ($request->status == "Cancelled") {
+            $cancelled_date = date("Y-m-d");
+        }
+
+        $update_data['O_delivery_date'] = $delivered_date;
+        $update_data['O_delivery_time'] = $delivered_time;
+        $update_data['on_the_way_date'] = $on_the_waydate;
+        $update_data['cancelled_date'] = $cancelled_date;
+
+        Order::where('id', $order_id)->update($update_data);
+
+        // Fetch user and address for jar count update and notification
+        $check_status = Order::find($order_id);
+        $custdetails = User::find($check_status->customer_id);
 
         if (!empty($check_status)) {
             $c_no_of_ordered = 0;
             $c_no_of_jars_returned = 0;
 
-            $order_products = OrderProducts::where('customer_id', $check_status->customer_id)->get();
+            // Recalculate jar counts for this customer and this specific address
+            $selected_address_id = $check_status->selected_address_id;
+            
+            $order_products = Orderproducts::where('customer_id', $check_status->customer_id)->get();
 
             foreach ($order_products as $p) {
-                $order = Order::where('id', $p->order_id)->first();
-                $product = Product::where('id', $p->product_id)->first();
+                // Find order associated with this product that is in 'Delivery' status and matches the same address
+                $delivered_order = Order::where('id', $p->order_id)
+                                        ->where('status', 'Delivery')
+                                        ->where('selected_address_id', $selected_address_id)
+                                        ->first();
 
-                if ($product->type == "jar") {
-                    if ($order->status == "Delivery") {
+                if (!empty($delivered_order)) {
+                    $product = Product::where('id', $p->product_id)->first();
+                    if (!empty($product) && $product->type == "jar") {
                         $c_no_of_ordered += $p->quantity;
+                        $c_no_of_jars_returned += $p->no_of_jars_returned;
                     }
-                    $c_no_of_jars_returned += $p->no_of_jars_returned;
                 }
             }
-            User::where('id', $check_status->customer_id)->update(['returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned]);
-        }
 
+            // Sync with User_address table (Correct) 
+            User_address::where('id', $selected_address_id)->update([
+                'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+            ]);
+            
+            // Sync with User table (Legacy/Optional)
+            User::where('id', $check_status->customer_id)->update([
+                'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+            ]);
+
+            // Sync current Order's returnablejar_qty for app response consistency
+            Order::where('id', $order_id)->update([
+                'returnablejar_qty' => $c_no_of_ordered - $c_no_of_jars_returned
+            ]);
+
+            // Inventory Update if status was changed to Delivery (only if it was not already Delivery)
+            if ($request->status == "Delivery" && $order->status != "Delivery") {
+                $order_products_list = Orderproducts::where('order_id', $order_id)->get();
+                foreach($order_products_list as $op) {
+                    $prod = Product::find($op->product_id);
+                    if($prod) {
+                        $prod->update(['quantity_per_case' => $prod->quantity_per_case - $op->quantity]);
+                    }
+                }
+            }
+
+            // Push Notifications (Sync with Mobile App)
+            if ($request->status == "On the way" || $request->status == "Delivery") {
+                Helper::SendNotification("Hi " . $custdetails->name . "", "Your Order status changed successfully", "order_status", $order_id, $check_status->customer_id);
+                Helper::SendNotification("Order status", "Your Order status changed successfully", "adminorder_status", $order_id, $check_status->customer_id);
+            }
+        }
 
         Session::flash('message', 'Order status updated');
         return redirect()->back();

@@ -32,7 +32,7 @@ Route::group([
   Route::post('/all-user', [ApiController::class , 'allUsers'])->name('all-user');
   Route::post('/store_token', [AuthController::class , 'storeToken']);
 
-  Route::get('/user_details', [AuthController::class , 'user_details']);
+  Route::match(['get', 'post'], '/user_details', [AuthController::class , 'user_details']);
   //Cart
   Route::post('add_to_cart', [CartController::class , 'add_to_cart']);
   Route::delete('delete_cart', [CartController::class , 'delete_cart']);
