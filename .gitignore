@@ -1,9 +1,10 @@
 /node_modules
-/public/hot
+/public/backend
 /public/storage
-/storage/*.key
+# /storage/*.key
+# /storage/app/firebase
 /vendor
-.env
+# .env
 .env.backup
 .env.production
 .phpunit.result.cache
