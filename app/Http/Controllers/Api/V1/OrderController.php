@@ -573,6 +573,9 @@ class OrderController extends Controller
                 $u_type = ucfirst($user->user_type);
                 $notifications = new Notifications;
                 $notifications->user_id = $user->id;
+                if (!$orderData) {
+                    throw new \Exception("Order processing failed: ID not found for " . $orderid);
+                }
                 $notifications->order_id = $orderData->id;
                 $notifications->message = "Order placed from " . $user_details->name . " " . $u_type;
                 $notifications->type = "orders";
@@ -752,12 +755,14 @@ class OrderController extends Controller
                 ], 500);
             }
             $sms_cust_data = json_decode($sms_response, true);
-            if (!isset($sms_cust_data['status']) || $sms_cust_data['status'] !== 'Success') {
-                return response()->json([
-                    'statuscode' => $sms_cust_data['code'] ?? 400,
-                    'message' => "Failed to send message",
-                    'error' => $sms_cust_data['description'] ?? 'Unknown error'
-                ], 400);
+            if (!is_array($sms_cust_data) || !isset($sms_cust_data['status']) || $sms_cust_data['status'] !== 'Success') {
+                Log::warning("Customer SMS failed: " . $sms_response);
+                // Optionally return or just log
+                // return response()->json([
+                //     'statuscode' => $sms_cust_data['code'] ?? 400,
+                //     'message' => "Failed to send message",
+                //     'error' => $sms_cust_data['description'] ?? 'Unknown error'
+                // ], 400);
             }
 
             //send sms to admin
@@ -778,12 +783,13 @@ class OrderController extends Controller
                 ], 500);
             }
             $sms_admin_data = json_decode($sms_admin_response, true);
-            if (!isset($sms_admin_data['status']) || $sms_admin_data['status'] !== 'Success') {
-                return response()->json([
-                    'statuscode' => $sms_admin_data['code'] ?? 400,
-                    'message' => "Failed to send message",
-                    'error' => $sms_admin_data['description'] ?? 'Unknown error'
-                ], 400);
+            if (!is_array($sms_admin_data) || !isset($sms_admin_data['status']) || $sms_admin_data['status'] !== 'Success') {
+                 Log::warning("Admin SMS failed: " . $sms_admin_response);
+                // return response()->json([
+                //     'statuscode' => $sms_admin_data['code'] ?? 400,
+                //     'message' => "Failed to send message",
+                //     'error' => $sms_admin_data['description'] ?? 'Unknown error'
+                // ], 400);
             }
             $success['statuscode'] = 200;
             $success['message'] = "Order saved successfully";
@@ -803,7 +809,7 @@ class OrderController extends Controller
         }
         catch (Exception $e) {
             $success['statuscode'] = 401;
-            $success['message'] = "Something went wrong";
+            $success['message'] = "Something went wrong: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine();
             /**
              * params value (user_id,otp,token)
              **/
