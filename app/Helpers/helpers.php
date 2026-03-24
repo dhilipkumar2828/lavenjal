@@ -1,427 +1,336 @@
 <?php
-namespace App\helpers;
 
+namespace App\Helpers;
+
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
-use Illuminate\Http\Request;
 use App\Models\Order;
-use Pusher\Pusher;
-use Auth;
-use App\Models\ShippingAddress;
 use App\Models\Owner_meta_data;
 use App\Models\User_address;
-use Notification;
-use DB;
-
-use App\Notifications\SendPushNotification;
-use Illuminate\Support\Facades\Log;
+use Pusher\Pusher;
 
 class Helper
 {
-
-
+    // ---------------------------------------
+    // GOOGLE MAP DISTANCE
+    // ---------------------------------------
     public static function map($delivery_lat, $delivery_lang, $distributor_lat, $distributor_lang)
     {
-        $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins=" . $delivery_lat . "," . $delivery_lang . "&destinations=" . $distributor_lat . "," . $distributor_lang . "&mode=driving&language=pl-PL&key=AIzaSyAMWBCScrGIa5WPe9VB39Kiz_ER7M363uM";
-        //   $dist='';
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_PROXYPORT, 3128);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-        $response = curl_exec($ch);
-        $response_a = json_decode($response, true);
-        if (isset($response_a['rows'][0]['elements'][0]['distance']['text'])) {
-            $m = $response_a['rows'][0]['elements'][0]['distance']['text'];
-        }
-        else {
-            $m = 0;
-        }
+        $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins={$delivery_lat},{$delivery_lang}&destinations={$distributor_lat},{$distributor_lang}&mode=driving&key=YOUR_GOOGLE_API_KEY";
 
-        return $m;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 5
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+
+        return $data['rows'][0]['elements'][0]['distance']['text'] ?? 0;
     }
 
-
-    /**
-     * Generate a short-lived OAuth2 Bearer token from a Firebase service account JSON file.
-     * Used for FCM HTTP v1 API authentication.
-     */
+    // ---------------------------------------
+    // FCM ACCESS TOKEN
+    // ---------------------------------------
     public static function getFcmAccessToken($serviceAccountPath)
     {
         if (!file_exists($serviceAccountPath)) {
-            Log::error("FCM service account file not found: " . $serviceAccountPath);
+            Log::error("FCM file missing: $serviceAccountPath");
             return null;
         }
 
         $serviceAccount = json_decode(file_get_contents($serviceAccountPath), true);
-        if (empty($serviceAccount)) {
-            Log::error("FCM service account JSON is invalid: " . $serviceAccountPath);
+
+        if (!$serviceAccount) {
+            Log::error("Invalid JSON: $serviceAccountPath");
             return null;
         }
 
-        $privateKey = $serviceAccount['private_key'];
-        $clientEmail = $serviceAccount['client_email'];
-        $tokenUri = $serviceAccount['token_uri'];
-
         $now = time();
+
         $jwtHeader = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
         $jwtClaims = base64_encode(json_encode([
-            'iss' => $clientEmail,
+            'iss' => $serviceAccount['client_email'],
             'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
-            'aud' => $tokenUri,
+            'aud' => $serviceAccount['token_uri'],
             'iat' => $now,
             'exp' => $now + 3600,
         ]));
 
-        // URL-safe base64 encode
         $jwtHeader = str_replace(['+', '/', '='], ['-', '_', ''], $jwtHeader);
         $jwtClaims = str_replace(['+', '/', '='], ['-', '_', ''], $jwtClaims);
 
-        $signingInput = $jwtHeader . '.' . $jwtClaims;
+        $signatureInput = $jwtHeader . '.' . $jwtClaims;
 
-        $signature = '';
-        $key = openssl_pkey_get_private($privateKey);
-        if (!$key || !openssl_sign($signingInput, $signature, $key, 'SHA256')) {
-            \Log::error("FCM JWT signing failed.");
-            return null;
-        }
+        openssl_sign($signatureInput, $signature, $serviceAccount['private_key'], 'SHA256');
 
-        $jwtSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        $jwt = $signingInput . '.' . $jwtSignature;
+        $jwt = $signatureInput . '.' . str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
 
-        // Exchange JWT for access token
-        $ch = curl_init($tokenUri);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion' => $jwt,
-        ]));
+        $ch = curl_init($serviceAccount['token_uri']);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 5,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ])
+        ]);
+
         $response = curl_exec($ch);
         curl_close($ch);
 
         $token = json_decode($response, true);
+
         return $token['access_token'] ?? null;
     }
 
-
+    // ---------------------------------------
+    // MAIN NOTIFICATION FUNCTION
+    // ---------------------------------------
     public static function SendNotification($title, $body, $type, $val, $user_id)
     {
-        $find_user = User::find($user_id);
+        $customerTokens = [];
+        $deliveryTokens = [];
 
+        // -----------------------------
+        // LOGIN
+        // -----------------------------
         if ($type == "login") {
-            $fctoken = "";
-            $FcmToken = $val;
+            $user = User::find($user_id);
+            if ($user && ($user->user_type == 'distributor' || $user->user_type == 'delivery_agent')) {
+                $deliveryTokens[] = $val;
+            } else {
+                $customerTokens[] = $val;
+            }
         }
 
-        else if ($type == "order_status") {
-            $order = Order::where('id', $val)->first();
-            if ($order->user_type == "customer") {
-                $FcmToken = User::whereNotNull('device_key')->where('id', $order->customer_id)->pluck('device_key')->all();
-                $delivery = User::select('id', 'name')->where('id', $order->assigned_deliveryboy)->first();
-                if ($order->status == "On the way") {
-                    $body = "Your Order has been accepted by " . $delivery->name . " ";
-                }
-                if ($order->status == "Delivery") {
-                    $body = "Your Order delivered successfully";
-                }
-            }
-            else if ($order->user_type == "delivery_agent" || $order->user_type == "retailer") {
-                $FcmToken = User::whereNotNull('device_key')->where('id', $order->customer_id)->pluck('device_key')->all();
-                $distributor = User::select('id', 'name')->where('id', $order->assigned_distributor)->first();
-                if ($order->status == "On the way") {
-                    $body = "Your Order has been accepted by " . $distributor->name . " ";
-                }
-                if ($order->status == "Delivery") {
-                    $body = "Your Order delivered successfully";
-                }
-            }
-            else {
-                $FcmToken = "";
-                $fctoken = "";
-            }
-        }
-        else if ($type == "adminorder_status") {
-            $order = Order::where('id', $val)->first();
-            if ($order->status == "On the way") {
-                if ($order->user_type == "customer") {
-                    $user = User::where('id', $order->assigned_deliveryboy)->first();
-                    $body = $order->order_id . " Order has been accpeted by " . $user->name;
-                }
-                else {
-                    $user = User::where('id', $order->assigned_distributor)->first();
-                    $body = $order->order_id . " Order has been accpeted by " . $user->name;
-                }
-                $FcmToken = User::whereNotNull('device_key')->where('user_type', "admin")->pluck('device_key')->all();
-            }
-            else {
-                $FcmToken = "";
-                $fctoken = "";
-            }
-        }
-        else if ($type == "checkout") {
-        // Reserved for future use
-        }
-        else if ($type == "checkout_retailer") {
-            $order = Order::where('id', $val)->first();
-            if ($order->user_type != "customer") {
-                $body = "Order placed from " . $order->user_type;
-
-                // Find the distributor assigned to this Order
-                if (!empty($order->assigned_distributor)) {
-                    $FcmToken = User::whereNotNull('device_key')->where('id', $order->assigned_distributor)->where('device_key', '!=', "'")->pluck('device_key')->all();
-                }
-                else {
-                    // Fallback: Notify all retailers if no specific distributor found? 
-                    $FcmToken = User::whereNotNull('device_key')->where('user_type', "retailer")->pluck('device_key')->all();
-                }
-                $find_user->user_type = "delivery_agent"; // Use distributor FCM channel
-            }
-            else {
-                $FcmToken = "";
-                $fctoken = "";
-            }
-        }
+        // -----------------------------
+        // ORDER → DISTRIBUTOR + AGENTS
+        // -----------------------------
         else if ($type == "checkout_customer") {
-            $order = Order::where('id', $val)->first();
-            \Log::info("FCM checkout_customer: OrderID(PK)=$val, Result=" . ($order ? "Found" : "NotFound"));
 
-            // Collect tokens from multiple possible recipients
-            // 1. Hardcoded dispatcher (1836)
-            $dispatcherToken = User::whereNotNull('device_key')->where('id', 1836)->where('device_key', '!=', "'")->pluck('device_key')->all();
+            $order = Order::find($val);
 
-            // 2. Determine recipients based on assigned_distributor OR Zip Code
-            $distributorToken = [];
-            $deliveryAgentTokens = [];
+            if (!$order) {
+                Log::error("Order not found: " . $val);
+                return;
+            }
+
             $assignedDistributorIds = [];
 
-            if (!empty($order->assigned_distributor) && $order->assigned_distributor != 0) {
+            // CASE 1: DIRECT ASSIGN
+            if (!empty($order->assigned_distributor)) {
                 $assignedDistributorIds[] = $order->assigned_distributor;
-            } else if ($order) {
-                // Find distributors (user_type=distributor) matching the order's pincode
-                $zip_code = User_address::where('id', $order->selected_address_id)->value('zip_code');
-                if (!empty($zip_code)) {
-                    $assignedDistributorIds = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
-                        ->where('users.user_type', 'distributor')
-                        ->where('owners_meta_data.pincode', $zip_code)
-                        ->pluck('owners_meta_data.user_id')->all();
-                }
             }
 
-            if (!empty($assignedDistributorIds)) {
-                // Get Distributor Tokens
-                $distributorToken = User::whereNotNull('device_key')
-                    ->whereIn('id', $assignedDistributorIds)
-                    ->where('device_key', '!=', "'")
-                    ->pluck('device_key')->all();
-
-                // Get All Delivery Agents for these distributors
-                $deliveryAgentTokens = User::join('owners_meta_data', 'users.id', '=', 'owners_meta_data.user_id')
-                    ->whereNotNull('users.device_key')
-                    ->where('users.user_type', 'delivery_agent')
-                    ->whereIn('owners_meta_data.assigned_distributor', $assignedDistributorIds)
-                    ->where('users.device_key', '!=', "'")
-                    ->pluck('users.device_key')->all();
-            }
-
-            // Combine all tokens
-            $FcmToken = array_merge($dispatcherToken, $distributorToken, $deliveryAgentTokens);
-            \Log::info("FCM checkout_customer: Total tokens to notify: " . count($FcmToken) . " (incl. " . count($deliveryAgentTokens) . " delivery agents)");
-
-            $find_user->user_type = "delivery_agent"; // To use lavenjal-delivery service account
-        }
-        else if ($type == "checkout_customernoty") {
-            $order = Order::where('id', $val)->first();
-            $FcmToken = User::whereNotNull('device_key')->where('id', $order->customer_id)->pluck('device_key')->all();
-            $body = "Your order has been placed";
-        }
-        else if ($type == "register") {
-            $FcmToken = User::whereNotNull('device_key')->where('user_type', "admin")->pluck('device_key')->all();
-            $user = User::where('id', $val)->first();
-            if ($user->user_type == "customer") {
-                $body = "New customer has been registered";
-            }
-            else if ($user->user_type == "distributor") {
-                $body = "New Distributor has been Registered and waiting for your Approval";
-            }
-            else if ($user->user_type == "delivery_agent") {
-                $body = "New Delivery agent has been Registered and waiting for your Approval";
-            }
+            // CASE 2: ZIP MATCH
             else {
-                $body = "New Retailer has been Registered and waiting for your Approval";
-            }
-        }
-        else {
-            $FcmToken = User::whereNotNull('device_key')->pluck('device_key')->all();
-        }
-        // Resolve FCM token list
-        if (!empty($FcmToken) && $type != "login") {
-            $result = [];
-            foreach ($FcmToken as $f) {
-                $value = json_decode($f, true);
-                // If it's a valid JSON array, use it. Otherwise, treat as a single token string.
-                if (json_last_error() === JSON_ERROR_NONE && is_array($value)) {
-                    $result[] = $value;
+                $zip = User_address::where('id', $order->selected_address_id)->value('zip_code');
+
+                if (empty($zip)) {
+                    Log::warning("ZIP not found for order: " . $val);
                 }
                 else {
-                    $result[] = (array)$f;
+                    $assignedDistributorIds = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
+                        ->where('users.user_type', 'distributor')
+                        ->where('owners_meta_data.pincode', $zip)
+                        ->pluck('owners_meta_data.user_id')
+                        ->toArray();
                 }
             }
-            $tokens = array_merge(...$result);
-        }
-        else if ($type == "login") {
-            // For login, FcmToken is already a single string from the OTP verification call
-            $tokens = array($FcmToken);
-        }
-        else {
-            $fctoken = "";
-            $tokens = array($fctoken);
-        }
 
-        // Resolve FCM token list
-        Log::info("FCM Notification: Type=$type, RecipientID=$user_id, Tokens=" . count($tokens));
+            Log::info("Assigned Distributor IDs:", $assignedDistributorIds);
 
-        // -------------------------------------------------------
-        // FCM HTTP v1 API — Service Account per user type
-        // -------------------------------------------------------
+            // -----------------------------
+            // GET TOKENS
+            // -----------------------------
+            if (!empty($assignedDistributorIds)) {
 
-        // Select Project based on the recipient's user type.
-        // (Note: For distributor alerts, find_user->user_type is forced to delivery_agent earlier)
-        if ($find_user->user_type == "customer" || $find_user->user_type == "retailer") {
-            // Customer / Retailer — Firebase project: lavenjal-user
-            $serviceAccountPath = storage_path('app/firebase/customer-service-account.json');
-            $fcmProjectId = 'lavenjal-user';
-        }
-        else {
-            // Distributor / Delivery Boy — Firebase project: lavenjal-delivery
-            $serviceAccountPath = storage_path('app/firebase/distributor-service-account.json');
-            $fcmProjectId = 'lavenjal-delivery';
-        }
+                // DISTRIBUTOR TOKENS
+                $distributorTokens = User::whereIn('id', $assignedDistributorIds)
+                    ->whereNotNull('device_key')
+                    ->where('device_key', '!=', '')
+                    ->pluck('device_key')
+                    ->toArray();
 
-        // Get OAuth2 Bearer token from service account
-        $accessToken = self::getFcmAccessToken($serviceAccountPath);
+                // DELIVERY AGENT TOKENS
+                $agentTokens = User::whereIn('id', function ($q) use ($assignedDistributorIds) {
+                    $q->select('user_id')
+                        ->from('owners_meta_data')
+                        ->whereIn('assigned_distributor', $assignedDistributorIds);
+                })
+                    ->whereNotNull('device_key')
+                    ->where('device_key', '!=', '')
+                    ->pluck('device_key')
+                    ->toArray();
 
-        if (empty($accessToken)) {
-            Log::error("FCM Error: Failed to get OAuth2 token for user_type: " . $find_user->user_type);
-            return json_encode(['error' => 'Failed to get FCM access token.']);
+                Log::info("Distributor Tokens:", $distributorTokens);
+                Log::info("Agent Tokens:", $agentTokens);
+
+                $deliveryTokens = array_merge($distributorTokens, $agentTokens);
+            }
+            else {
+                Log::warning("No distributors found for order: " . $val);
+            }
         }
 
-        $fcmUrl = 'https://fcm.googleapis.com/v1/projects/' . $fcmProjectId . '/messages:send';
-        $results = [];
+        // -----------------------------
+        // CUSTOMER CONFIRMATION
+        // -----------------------------
+        else if ($type == "checkout_customernoty") {
 
-        foreach ($tokens as $token) {
-            if (empty($token))
+            $order = Order::find($val);
+
+            if ($order) {
+                $customerTokens = User::where('id', $order->customer_id)
+                    ->whereNotNull('device_key')
+                    ->pluck('device_key')
+                    ->toArray();
+
+                $body = "Your order has been placed";
+            }
+        }
+
+        // -----------------------------
+        // CLEAN TOKENS
+        // -----------------------------
+        $customerTokens = self::cleanTokens($customerTokens);
+        $deliveryTokens = self::cleanTokens($deliveryTokens);
+
+        Log::info("Customer Tokens Count: " . count($customerTokens));
+        Log::info("Delivery Tokens Count: " . count($deliveryTokens));
+
+        // -----------------------------
+        // SEND FCM
+        // -----------------------------
+        if (!empty($customerTokens)) {
+            self::sendFcm($customerTokens, $title, $body, 'lavenjal-user', 'customer-service-account.json');
+        }
+
+        if (!empty($deliveryTokens)) {
+            self::sendFcm($deliveryTokens, $title, $body, 'lavenjal-delivery', 'distributor-service-account.json');
+        }
+    }
+    // ---------------------------------------
+    // TOKEN CLEANER
+    // ---------------------------------------
+    private static function cleanTokens($tokens)
+    {
+        $final = [];
+
+        foreach ($tokens as $t) {
+
+            if (empty($t))
                 continue;
 
-            $data = [
+            if (str_starts_with($t, '[')) {
+                $decoded = json_decode($t, true);
+
+                if (is_array($decoded)) {
+                    foreach ($decoded as $d) {
+                        if (self::isValidToken($d)) {
+                            $final[] = $d;
+                        }
+                    }
+                }
+            }
+            else {
+                if (self::isValidToken($t)) {
+                    $final[] = $t;
+                }
+            }
+        }
+
+        return array_values(array_unique($final));
+    }
+
+    private static function isValidToken($token)
+    {
+        return !empty($token) && strlen($token) > 100;
+    }
+
+    // ---------------------------------------
+    // FCM SENDER
+    // ---------------------------------------
+    private static function sendFcm($tokens, $title, $body, $projectId, $jsonFile)
+    {
+        if (empty($tokens)) {
+            Log::warning("No tokens for $projectId");
+            return;
+        }
+
+        $accessToken = self::getFcmAccessToken(storage_path("app/firebase/" . $jsonFile));
+
+        if (!$accessToken) {
+            Log::error("FCM Auth failed for $projectId");
+            return;
+        }
+
+        $url = "https://fcm.googleapis.com/v1/projects/$projectId/messages:send";
+
+        foreach ($tokens as $token) {
+
+            $payload = [
                 "message" => [
                     "token" => $token,
                     "notification" => [
                         "title" => $title,
                         "body" => $body,
-                    ],
+                    ]
                 ]
             ];
 
-            $headers = [
-                'Authorization: Bearer ' . $accessToken,
-                'Content-Type: application/json',
-            ];
+            $ch = curl_init($url);
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $fcmUrl);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_HTTPHEADER => [
+                    "Authorization: Bearer $accessToken",
+                    "Content-Type: application/json"
+                ],
+                CURLOPT_POSTFIELDS => json_encode($payload),
+            ]);
 
-            $result = curl_exec($ch);
-            if ($result === FALSE) {
-                $err = curl_error($ch);
-                \Log::error("FCM Send Curl Failed: " . $err);
-                $results[] = ['error' => 'Curl failed: ' . $err];
+            $res = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+            if ($res === false) {
+                Log::error("Curl Error: " . curl_error($ch));
             }
             else {
-                $decoded = json_decode($result, true);
-                \Log::info("FCM Send Response (Project: $fcmProjectId, Token: " . substr($token, 0, 10) . "...): ", (is_array($decoded) ? $decoded : ["raw" => $result]));
-                $results[] = $decoded;
+                Log::info("FCM [$projectId][$code]: $res");
             }
+
             curl_close($ch);
         }
-
-        return json_encode($results);
     }
 
-
-
+    // ---------------------------------------
+    // LOGIN HELPER
+    // ---------------------------------------
     public static function Notification($token, $user_id)
     {
         self::SendNotification("Welcome", "Successfully Logged in", "login", $token, $user_id);
     }
 
-
-    public static function notification_timing($date)
-    {
-        date_default_timezone_set("Asia/Kolkata");
-        $seconds = time() - strtotime($date);
-
-        $months = floor($seconds / (3600 * 24 * 30));
-        $day = floor($seconds / (3600 * 24));
-        $hours = floor($seconds / 3600);
-        $mins = floor(($seconds - ($hours * 3600)) / 60);
-        $secs = floor($seconds % 60);
-
-        if ($seconds < 60)
-            $time = $secs . " seconds ago";
-        else if ($seconds < 60 * 60)
-            $time = $mins . " min ago";
-        else if ($seconds < 24 * 60 * 60)
-            $time = $hours . " hours ago";
-        else if ($seconds < 24 * 60 * 60)
-            $time = $day . " day ago";
-        else
-            $time = $months . " month ago";
-
-        return $time;
-    }
-
-    public static function encrypt_decrypt($action, $string)
-    {
-        $output = false;
-        $encrypt_method = "AES-256-CBC";
-        $secret_key = '@!kvrahul';
-        $secret_iv = '@!kvrahul';
-        $key = hash('sha256', $secret_key);
-        $iv = substr(hash('sha256', $secret_iv), 0, 16);
-        if ($action == 'encrypt') {
-            $output = openssl_encrypt($string, $encrypt_method, $key, 0, $iv);
-            $output = base64_encode($output);
-        }
-        else if ($action == 'decrypt') {
-            $output = openssl_decrypt(base64_decode($string), $encrypt_method, $key, 0, $iv);
-        }
-        return $output;
-
-    }
-
+    // ---------------------------------------
+    // PUSHER LIVE
+    // ---------------------------------------
     public static function live_notification()
     {
-        $options = array(
-            'cluster' => 'ap2',
-            'useTLS' => true
-        );
         $pusher = new Pusher(
             '3cb8fd24827957fe7f59',
             '90125215be51dcb483ef',
             '1594049',
-            $options
-            );
+            ['cluster' => 'ap2', 'useTLS' => true]
+        );
 
-        $data = [];
-        $pusher->trigger('my-channel', 'my-event', $data);
+        $pusher->trigger('my-channel', 'my-event', []);
     }
 }
