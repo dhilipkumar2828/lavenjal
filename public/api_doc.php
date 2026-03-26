@@ -241,14 +241,14 @@ $api_list = [
             'url' => 'v1/send_otp',
             'method' => 'POST',
             'payload' => 'phone: "9876543210", user_type: "customer" (customer/retailer/distributor/delivery_agent)',
-            'description' => 'OTP for mobile verify'
+            'description' => 'OTP for mobile verify (Test Phone: 6385395991, Default OTP: 12345 for Customer/Delivery Agent)'
         ],
         [
             'name' => 'Verify OTP',
             'url' => 'v1/verify_otp',
             'method' => 'POST',
             'payload' => 'user_id: "5", otp: "45321", token: "fcm_device_token_here"',
-            'description' => 'Completes OTP login'
+            'description' => 'Completes OTP login (Use OTP 12345 for test phone 6385395991)'
         ],
         [
             'name' => 'Banner Slider',
