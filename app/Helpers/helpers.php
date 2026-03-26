@@ -330,9 +330,34 @@ class Helper
             '3cb8fd24827957fe7f59',
             '90125215be51dcb483ef',
             '1594049',
-        ['cluster' => 'ap2', 'useTLS' => true]
-            );
+            ['cluster' => 'ap2', 'useTLS' => true]
+        );
 
         $pusher->trigger('my-channel', 'my-event', []);
+    }
+
+    // ---------------------------------------
+    // NOTIFICATION TIMING (human-readable relative time)
+    // ---------------------------------------
+    public static function notification_timing($created_at)
+    {
+        $now = \Carbon\Carbon::now();
+        $time = \Carbon\Carbon::parse($created_at);
+        $diff = $now->diffInSeconds($time);
+
+        if ($diff < 60) {
+            return 'just now';
+        } elseif ($diff < 3600) {
+            $mins = $now->diffInMinutes($time);
+            return $mins . ' min' . ($mins > 1 ? 's' : '') . ' ago';
+        } elseif ($diff < 86400) {
+            $hours = $now->diffInHours($time);
+            return $hours . ' hour' . ($hours > 1 ? 's' : '') . ' ago';
+        } elseif ($diff < 604800) {
+            $days = $now->diffInDays($time);
+            return $days . ' day' . ($days > 1 ? 's' : '') . ' ago';
+        } else {
+            return $time->format('d M Y');
+        }
     }
 }

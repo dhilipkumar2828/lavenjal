@@ -435,14 +435,14 @@ class OrderController extends Controller
                         ->where('status', 'active')
                         ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
                         ->first();
-                    
+
                     if (empty($get_shipadd) && $selectedAddress->floor_no >= 4) {
                         $get_shipadd = DeliveryCharges::where('floor_no', 4)
                             ->where('status', 'active')
                             ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
                             ->first();
                     }
-                    
+
                     $deliveramt = (!empty($get_shipadd) ? (float)$get_shipadd->amount : 0.0);
                 }
 
@@ -554,14 +554,14 @@ class OrderController extends Controller
                         ->where('status', 'active')
                         ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
                         ->first();
-                    
+
                     if (empty($get_shipadd) && $get_useradd->floor_no >= 4) {
                         $get_shipadd = DeliveryCharges::where('floor_no', 4)
                             ->where('status', 'active')
                             ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
                             ->first();
                     }
-                    
+
                     $deliveramt = (!empty($get_shipadd) ? (float)$get_shipadd->amount : 0.0);
                 }
             }
@@ -2810,7 +2810,7 @@ class OrderController extends Controller
                 ->first();
 
             if (empty($charges) && $target_address->floor_no >= 4) {
-                 $charges = DeliveryCharges::where('floor_no', 4)
+                $charges = DeliveryCharges::where('floor_no', 4)
                     ->where('status', 'active')
                     ->selectRaw("IF(is_discount = 'true', 0, amount) as amount, is_discount")
                     ->first();
