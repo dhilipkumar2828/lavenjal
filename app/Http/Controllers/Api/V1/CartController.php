@@ -58,7 +58,10 @@ class CartController extends Controller
             $user = Auth::user();
 
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-            $charges = $user_address ?DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
+            $charges = $user_address ? DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
+            if (!$charges && $user_address && $user_address->floor_no >= 4) {
+                $charges = DeliveryCharges::where('floor_no', 4)->first();
+            }
 
             $is_ordered = 0;
             $order_list = Order::where('customer_id', $user->id)->get();
@@ -203,12 +206,16 @@ class CartController extends Controller
             $delivery_charge_value = '0.00';
 
             if (!empty($user_address)) {
-                // If there IS a lift (is_lift is true or 1), check for floors above the 1st floor
-                if ($user_address->is_lift == 'true' || $user_address->is_lift == '1') {
-                    if ($user_address->floor_no > 1) {
-                        $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
-                        $delivery_charge_value = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+                // Apply delivery charges for floors 2 and above
+                if ($user_address->floor_no > 1) {
+                    $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
+                    
+                    // Fallback for floor 4 and above if specific record not found
+                    if (!$charges && $user_address->floor_no >= 4) {
+                        $charges = DeliveryCharges::where('floor_no', 4)->first();
                     }
+                    
+                    $delivery_charge_value = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
                 }
             }
 
@@ -227,7 +234,7 @@ class CartController extends Controller
             $returnable_jarqty = 0;
             $discountamt = 0;
             $no_of_jars_returned = 0;
-            $jar_quantity = 0;
+            $total_product_quantity = 0;
 
             $is_ordered = 0;
             $order_list = Order::where('customer_id', $user->id)->get();
@@ -253,7 +260,7 @@ class CartController extends Controller
                 if ($product->type == "jar") {
                     $carts[$key]['is_jar'] = true;
                     $is_jar_available = true;
-                    $jar_quantity += $cart->product_qty;
+                    // $jar_quantity += $cart->product_qty; // Replaced by total_product_quantity below
 
                     if ($is_ordered == 0) {
                         $carts[$key]['default_qty'] = 3;
@@ -269,6 +276,8 @@ class CartController extends Controller
                     $carts[$key]['default_qty'] = 1;
                     $carts[$key]['max_qty'] = 10;
                 }
+                
+                $total_product_quantity += $cart->product_qty;
 
                 $carts[$key]['product_image'] = "https://lavenjal.com/" . $product->image;
                 $carts[$key]['per_jar_rate'] = $product->deposit_amount;
@@ -292,8 +301,8 @@ class CartController extends Controller
             //  }
             $available_jar = $available_jar_balance;
 
-            if ($jar_quantity > 0) {
-                $delivery_charge = $jar_quantity * (!empty($delivery_charge) ? $delivery_charge : 0);
+            if ($total_product_quantity > 0) {
+                $delivery_charge = $total_product_quantity * (!empty($delivery_charge) ? $delivery_charge : 0);
             }
 
             $params = [];

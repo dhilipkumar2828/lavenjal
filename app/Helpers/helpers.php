@@ -93,6 +93,7 @@ class Helper
     // ---------------------------------------
     public static function SendNotification($title, $body, $type, $val, $user_id)
     {
+
         $customerTokens = [];
         $deliveryTokens = [];
 
@@ -103,7 +104,8 @@ class Helper
             $user = User::find($user_id);
             if ($user && ($user->user_type == 'distributor' || $user->user_type == 'delivery_agent')) {
                 $deliveryTokens[] = $val;
-            } else {
+            }
+            else {
                 $customerTokens[] = $val;
             }
         }
@@ -136,15 +138,15 @@ class Helper
                 }
                 else {
                     $assignedDistributorIds = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
-                        ->where('users.user_type', 'distributor')
+                        ->whereIn('users.user_type', ['distributor', 'delivery_agent'])
                         ->where('owners_meta_data.pincode', $zip)
                         ->pluck('owners_meta_data.user_id')
                         ->toArray();
+
                 }
             }
 
             Log::info("Assigned Distributor IDs:", $assignedDistributorIds);
-
             // -----------------------------
             // GET TOKENS
             // -----------------------------
@@ -158,20 +160,20 @@ class Helper
                     ->toArray();
 
                 // DELIVERY AGENT TOKENS
-                $agentTokens = User::whereIn('id', function ($q) use ($assignedDistributorIds) {
-                    $q->select('user_id')
-                        ->from('owners_meta_data')
-                        ->whereIn('assigned_distributor', $assignedDistributorIds);
-                })
-                    ->whereNotNull('device_key')
-                    ->where('device_key', '!=', '')
-                    ->pluck('device_key')
-                    ->toArray();
+                // $agentTokens = User::whereIn('id', function ($q) use ($assignedDistributorIds) {
+                //     $q->select('user_id')
+                //         ->from('owners_meta_data')
+                //         ->whereIn('assigned_distributor', $assignedDistributorIds);
+                // })
+                //     ->whereNotNull('device_key')
+                //     ->where('device_key', '!=', '')
+                //     ->pluck('device_key')
+                //     ->toArray();
 
                 Log::info("Distributor Tokens:", $distributorTokens);
-                Log::info("Agent Tokens:", $agentTokens);
+                // Log::info("Agent Tokens:", $agentTokens);
 
-                $deliveryTokens = array_merge($distributorTokens, $agentTokens);
+                $deliveryTokens = array_merge($distributorTokens);
             }
             else {
                 Log::warning("No distributors found for order: " . $val);
@@ -328,8 +330,8 @@ class Helper
             '3cb8fd24827957fe7f59',
             '90125215be51dcb483ef',
             '1594049',
-            ['cluster' => 'ap2', 'useTLS' => true]
-        );
+        ['cluster' => 'ap2', 'useTLS' => true]
+            );
 
         $pusher->trigger('my-channel', 'my-event', []);
     }

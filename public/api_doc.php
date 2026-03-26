@@ -2,7 +2,7 @@
 
 /**
  * Lavenjal API Documentation
- * Base URL: http://192.168.1.7:8000/api/
+ * Base URL: http://192.168.1.18:8000/api/
  * Google Maps API Key: AIzaSyAMWBCScrGIa5WPe9VB39Kiz_ER7M363uM
  */
 
@@ -241,14 +241,14 @@ $api_list = [
             'url' => 'v1/send_otp',
             'method' => 'POST',
             'payload' => 'phone: "9876543210", user_type: "customer" (customer/retailer/distributor/delivery_agent)',
-            'description' => 'OTP for mobile verify'
+            'description' => 'OTP for mobile verify (Test Phone: 6385395991, Default OTP: 12345 for Customer/Delivery Agent)'
         ],
         [
             'name' => 'Verify OTP',
             'url' => 'v1/verify_otp',
             'method' => 'POST',
             'payload' => 'user_id: "5", otp: "45321", token: "fcm_device_token_here"',
-            'description' => 'Completes OTP login'
+            'description' => 'Completes OTP login (Use OTP 12345 for test phone 6385395991)'
         ],
         [
             'name' => 'Banner Slider',
@@ -303,7 +303,7 @@ echo "<!DOCTYPE html>
 <body>";
 
 echo "<h1>Lavenjal API Documentation</h1>";
-echo "<p><strong>Base URL:</strong> <code>http://192.168.1.7:8000/api/</code></p>";
+echo "<p><strong>Base URL:</strong> <code>http://192.168.1.18:8000/api/</code></p>";
 
 // Google Maps Section
 echo "<div style='background:#fff;border-left:5px solid #4285F4;padding:16px 20px;margin-bottom:30px;box-shadow:0 1px 4px rgba(0,0,0,0.1);border-radius:4px;'>";
@@ -329,7 +329,7 @@ foreach ($api_list as $category => $routes) {
         echo "<td>{$i}</td>";
         echo "<td><strong>{$route['name']}</strong></td>";
         echo "<td><span class='{$method_class}'>{$route['method']}</span></td>";
-        echo "<td><code>http://192.168.1.7:8000/api/{$route['url']}</code></td>";
+        echo "<td><code>http://192.168.1.18:8000/api/{$route['url']}</code></td>";
         echo "<td><small><code>{$route['payload']}</code></small></td>";
         echo "<td>{$route['description']}</td>";
         echo "</tr>";
