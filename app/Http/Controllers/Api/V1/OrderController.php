@@ -2380,7 +2380,7 @@ class OrderController extends Controller
                                 }
 
 
-                                if ($request->status == "On the way" || $request->status == "Delivery") {
+                                if (!empty($request->status)) {
                                     Helper::SendNotification("Hi " . $custdetails->name . "", "Your Order status changed successfully", "order_status", $request->order_id, $check_status->customer_id);
 
                                     Helper::SendNotification("Order status", "Your Order status changed successfully", "adminorder_status", $request->order_id, $check_status->customer_id);
@@ -2468,7 +2468,7 @@ class OrderController extends Controller
                                     $notifications->save();
                                 }
 
-                                if ($request->status == "On the way" || $request->status == "Delivery") {
+                                if (!empty($request->status)) {
                                     Helper::SendNotification("Hi " . $custdetails->name . "", "Your Order status changed successfully", "order_status", $request->order_id, $check_status->customer_id);
 
                                     Helper::SendNotification("Order status", "Your Order status changed successfully", "adminorder_status", $request->order_id, $check_status->customer_id);
