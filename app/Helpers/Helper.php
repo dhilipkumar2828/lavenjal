@@ -104,8 +104,7 @@ class Helper
             $user = User::find($user_id);
             if ($user && ($user->user_type == 'distributor' || $user->user_type == 'delivery_agent')) {
                 $deliveryTokens[] = $val;
-            }
-            else {
+            } else {
                 $customerTokens[] = $val;
             }
         }
@@ -135,8 +134,7 @@ class Helper
 
                 if (empty($zip)) {
                     Log::warning("ZIP not found for order: " . $val);
-                }
-                else {
+                } else {
                     $assignedDistributorIds = Owner_meta_data::join('users', 'users.id', '=', 'owners_meta_data.user_id')
                         ->whereIn('users.user_type', ['distributor', 'delivery_agent'])
                         ->where('owners_meta_data.pincode', $zip)
@@ -174,8 +172,7 @@ class Helper
                 // Log::info("Agent Tokens:", $agentTokens);
 
                 $deliveryTokens = array_merge($distributorTokens);
-            }
-            else {
+            } else {
                 Log::warning("No distributors found for order: " . $val);
             }
         }
@@ -195,6 +192,32 @@ class Helper
 
                 $body = "Your order has been placed";
             }
+        }
+
+        // -----------------------------
+        // ORDER STATUS UPDATE (CUSTOMER)
+        // -----------------------------
+        else if ($type == "order_status") {
+            $order = Order::find($val);
+            if ($order) {
+                $customerTokens = User::where('id', $order->customer_id)
+                    ->whereNotNull('device_key')
+                    ->pluck('device_key')
+                    ->toArray();
+
+                // Use passed body if available
+                if (empty($body)) {
+                    $body = "Your Order status changed successfully";
+                }
+            }
+        }
+
+        // -----------------------------
+        // ORDER STATUS UPDATE (ADMIN/DISTRIBUTOR)
+        // -----------------------------
+        else if ($type == "adminorder_status") {
+            // Placeholder for admin notifications
+            Log::info("Admin Notification Triggered for status update on order: " . $val);
         }
 
         // -----------------------------
@@ -239,8 +262,7 @@ class Helper
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 if (self::isValidToken($t)) {
                     $final[] = $t;
                 }
@@ -304,8 +326,7 @@ class Helper
 
             if ($res === false) {
                 Log::error("Curl Error: " . curl_error($ch));
-            }
-            else {
+            } else {
                 Log::info("FCM [$projectId][$code]: $res");
             }
 
