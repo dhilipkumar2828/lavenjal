@@ -149,7 +149,7 @@ class OrderController extends Controller
             }
 
             $deliveramt = 0;
-            if ($selectedAddress->floor_no > 1) {
+            if ($selectedAddress->is_lift == 1 && $selectedAddress->floor_no > 1) {
                 $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
                     ->where('status', 'active')
                     ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
@@ -430,7 +430,7 @@ class OrderController extends Controller
             $selectedAddress = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
             $deliveramt = 0;
             if (!empty($selectedAddress)) {
-                if ($selectedAddress->floor_no > 1) {
+                if ($selectedAddress->is_lift == 1 && $selectedAddress->floor_no > 1) {
                     $get_shipadd = DeliveryCharges::where('floor_no', $selectedAddress->floor_no)
                         ->where('status', 'active')
                         ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
@@ -549,7 +549,7 @@ class OrderController extends Controller
             $get_useradd = User_address::where('id', $request->address_id)->first();
             $deliveramt = 0;
             if (!empty($get_useradd)) {
-                if ($get_useradd->floor_no > 1) {
+                if ($get_useradd->is_lift == 1 && $get_useradd->floor_no > 1) {
                     $get_shipadd = DeliveryCharges::where('floor_no', $get_useradd->floor_no)
                         ->where('status', 'active')
                         ->selectRaw("IF(is_discount = 'true', 0, amount) as amount")
@@ -2804,19 +2804,22 @@ class OrderController extends Controller
             $target_address->save();
 
             // 4. Update cart delivery charges based on new default address floor
-            $charges = DeliveryCharges::where('floor_no', $target_address->floor_no)
-                ->where('status', 'active')
-                ->selectRaw("IF(is_discount = 'true', 0, amount) as amount, is_discount")
-                ->first();
-
-            if (empty($charges) && $target_address->floor_no >= 4) {
-                $charges = DeliveryCharges::where('floor_no', 4)
+            $delivery_charge_amount = '0.00';
+            if ($target_address->is_lift == 1 && $target_address->floor_no > 1) {
+                $charges = DeliveryCharges::where('floor_no', $target_address->floor_no)
                     ->where('status', 'active')
                     ->selectRaw("IF(is_discount = 'true', 0, amount) as amount, is_discount")
                     ->first();
-            }
 
-            $delivery_charge_amount = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+                if (empty($charges) && $target_address->floor_no >= 4) {
+                    $charges = DeliveryCharges::where('floor_no', 4)
+                        ->where('status', 'active')
+                        ->selectRaw("IF(is_discount = 'true', 0, amount) as amount, is_discount")
+                        ->first();
+                }
+
+                $delivery_charge_amount = (!empty($charges) && $charges->is_discount == 'false') ? $charges->amount : '0.00';
+            }
             Carts::where('customer_id', $user->id)->update(['delivery_charges' => $delivery_charge_amount]);
 
             $success['statuscode'] = 200;

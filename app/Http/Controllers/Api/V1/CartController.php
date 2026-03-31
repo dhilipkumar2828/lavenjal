@@ -58,9 +58,12 @@ class CartController extends Controller
             $user = Auth::user();
 
             $user_address = User_address::where('user_id', $user->id)->where('is_default', 'true')->first();
-            $charges = $user_address ?DeliveryCharges::where('floor_no', $user_address->floor_no)->first() : null;
-            if (!$charges && $user_address && $user_address->floor_no >= 4) {
-                $charges = DeliveryCharges::where('floor_no', 4)->first();
+            $charges = null;
+            if ($user_address && $user_address->is_lift == 1 && $user_address->floor_no > 1) {
+                $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
+                if (!$charges && $user_address->floor_no >= 4) {
+                    $charges = DeliveryCharges::where('floor_no', 4)->first();
+                }
             }
 
             $is_ordered = 0;
@@ -207,7 +210,7 @@ class CartController extends Controller
 
             if (!empty($user_address)) {
                 // Apply delivery charges for floors 2 and above
-                if ($user_address->floor_no > 1) {
+                if ($user_address->is_lift == 1 && $user_address->floor_no > 1) {
                     $charges = DeliveryCharges::where('floor_no', $user_address->floor_no)->first();
 
                     // Fallback for floor 4 and above if specific record not found
