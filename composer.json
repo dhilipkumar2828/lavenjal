@@ -38,7 +38,9 @@
         "psr-4": {
             "Tests\\": "tests/"
         },
-        "files":[]
+        "files":[
+            "app/Helpers/helpers.php"
+            ]
     },
     "scripts": {
         "post-autoload-dump": [
