@@ -468,10 +468,11 @@ class OrderController extends Controller
             foreach ($carts as $cart) {
                 $product = Product::find($cart->product_id);
                 $cart->product_image = url('/') . '/' . $product->image;
-                if ($product->type == "jar") {
+                if ($product && $product->type == "jar") {
                     $jars_ordered += $cart->product_qty;
+                } else {
+                    $quantity += $cart->product_qty;
                 }
-                $quantity += $cart->product_qty;
                 $subamt += $cart->product_qty * $cart->price;
                 $depositamt += $cart->deposit_amount;
                 $returnablejar_qty += $cart->no_of_jars_returned;
